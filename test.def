@@ -1,0 +1,19 @@
+include: calc_exp.def
+
+macros:
+    use_double: 1
+    input: calc_input
+
+page: calc, basic_frame
+    subcode: main
+	$local s_line[1024]
+	$while fgets(s_line, 1024, stdin)
+	    $call local_input, $(input), s_line
+	    $local tf_result
+	    $if parse_expression(&tf_result)
+		print "    %g\n", tf_result
+	    $elif match_keyword("quit")
+		break
+
+
+
