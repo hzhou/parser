@@ -1,3 +1,5 @@
+include: calc_lex.def
+
 include: DefParser/parser.def
 include: DefParser/parser_pattern.def
 
@@ -5,155 +7,96 @@ subcode:: _autoload
     $global n_prec
     $list parse_expression
 
-fncode: parse_expression(double * p)
-    n_prec=0
-    $if parse_add(p)
-	return 1
-    $else
-	return 0
+# -----------------------------------------
+fncode: parse_expression
+    $return_type double *
+    return parse_add()
 
     # ---------------
     $list parse_prime
 
     &call op_left, add, mult, '+', '-'
 	$if *ts_op=='+'
-	    a+=b
+	    $call do_binary_op, +
 	$else
-	    a-=b
+	    $call do_binary_op, -
 
-    &call op_left, mult, prime, '*', '/'
+    &call op_left, mult, pow, '*', '/', '%'
 	$if *ts_op=='*'
-	    a*=b
+	    $call do_binary_op, *
+	$elif *ts_op=='%'
+	    $call do_binary_op, /
 	$else
-	    a/=b
+	    *tp_a=(int)(*tp_a) % (int)(*tp_b)
 
-fncode: parse_prime(double * p)
-    $call input_start
+    &call op_right, pow, prime, '^'
+	*tp_a = pow(*tp_a, *tp_b)
+
+fncode: parse_prime
     $list match_Number
+    $call parse_return_type
 
+    $call input_start
     $if match_char('(')
 	$call input_start
-	parse_expression(p)
+	tp_a=parse_expression()
 	$call expect, ')'
-	return 1
-    $elif match_Number(p)
-	return 1
+	return tp_a
+    $elif tp_a=match_Number()
+	return tp_a
     $elif match_identifier()
-	# $call parse_function
-	return 0
+	tp_a=NULL
+	$call get_ts_token
+	skip_space()
+	tb_has_bracket=0
+	$if match_char('(')
+	    tb_has_bracket=1
+	$call @parse_exp_list
+	$if tb_has_bracket
+	    $fcall match_bracket('(')
+	$call @do_function_call
+	return tp_a
     $else
-	return 0
+	return NULL
 	
-# -------------------------------------
-fncode: match_Number(double * p)
-    $local double tf_val=0.0
-    $call @debug_fcall
-    $call input_get_c, tn_c
-    $if !isdigit(tn_c)
-	$if tn_c>0
-	    $call input_back_char
-	return 0
-    $else
-	tn_flag=0
-	$if tn_c=='0'
-	    $call input_get_c, tn_c
-	    $if tn_c=='x' || tn_c=='X'
-		tn_flag=1
-		$call match_hexdecimal
-	    $elif tn_c=='b' || tn_c=='B'
-		tn_flag=2
-		$call match_binary
-	    $if tn_c>0
-		$call input_back_char
-	    $if tn_flag>0
-		*p=tf_val
-		return 1
-	$else
-	    tf_val=tn_c-'0'
-
-	$while 1
-	    $call input_get_c, tn_c
-	    $if tn_c>='0' && tn_c<='9'
-		tf_val=tf_val*10+(tn_c-'0')
-		print "tf_val=%.0f\n", tf_val
-	    $else
-		$if tn_c=='.'
-		    $call match_float_point
-		$elif tn_c=='e' || tn_c=='E'
-		    $call match_float_exp
-
-		$if tn_c>0
-		    $call input_back_char
-		*p=tf_val
-		return 1
-
-subcode: match_hexdecimal
-    # ---- Hexdecimal 
-    $while 1
-	$call input_get_c, tn_c
-	$if tn_c>='0' && tn_c<='9'
-	    tf_val=tf_val*16+(tn_c-'0')
-	$elif tn_c>='a' && tn_c<='f'
-	    tf_val=tf_val*16+10+(tn_c-'a')
-	$elif tn_c>='A' && tn_c<='F'
-	    tf_val=tf_val*16+10+(tn_c-'A')
-	$else
-	    break
-
-subcode: match_binary
-    # ---- Binary 
-    $while 1
-	$call input_get_c, tn_c
-	$if tn_c>='0' && tn_c<='1'
-	    tf_val=tf_val*2+(tn_c-'0')
-	$else
-	    break
-
-subcode: match_float_point
-    tn_place=1
-    tn_prec=0
-    $while 1
-	tn_place*=0.1
-	$call input_get_c, tn_c
-	$if tn_c>='0' && tn_c<='9'
-	    tf_val+=(tn_c-'0')*tn_place
-	    tn_prec++
-	$elif tn_c=='e' || tn_c=='E'
-	    $call match_float_exp
-	$else
-	    $call input_back_char
-	    break
-    $if tn_prec>n_prec
-	n_prec=tn_prec
-
-subcode: match_float_exp
-    tn_power=0
-    $while 1
-	$call input_get_c, tn_c
-	$if tn_c>='0' && tn_c<='9'
-	    tn_power=tn_power*10+(tn_c-'0')
-	$else
-	    $call input_back_char
-	    tf_val*=pow(10, tn_power)
-	    break
-
 # -------------------------------------
 subcode: debug_fcall
     # print Running $(FunctionName) ...
 
 subcode: op_left(name, parse, @op_list)
     $call build_op_macro, $(op_list)
-    $function parse_$(name)(double * p)
-	$local double a, double b
-	$if !parse_$(parse)(&a)
-	    return 0
-	$else
+    $function parse_$(name)
+	$call parse_return_type
+	$if tp_a=parse_$(parse)()
 	    $call input_start
 	    $while $(op)
 		ts_op=$(input)->buffer+$(input)->n_start
-		$call expect, parse_$(parse)(&b)
+		skip_space()
+		tp_b=parse_$(parse)()
+		$if !tp_b
+		    $call @parse_error, parse_$(parse)
 		BLOCK
+		free(tp_b)
 		$call input_start
-	    *p = a
-	    return 1
+	    return tp_a
+	$else
+	    return NULL
 
+subcode: op_right(name, parse, @op_list)
+    $call build_op_macro, $(op_list)
+    $function parse_$(name)
+	$call parse_return_type
+	$if tp_a=parse_$(parse)()
+	    $call input_start
+	    $if $(op)
+		ts_op=$(input)->buffer+$(input)->n_start
+		skip_space()
+		tp_b=parse_$(name)()
+		$if !tp_b
+		    $call @parse_error, parse_$(parse)
+		BLOCK
+		free(tp_b)
+		$call input_start
+	    return tp_a
+	$else
+	    return NULL
