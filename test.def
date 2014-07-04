@@ -1,3 +1,6 @@
+include: c/darray.def
+include: DefParser.def
+
 include: calc_lex.def
 include: calc_exp.def
 
@@ -7,11 +10,14 @@ macros:
 
 page: calc, basic_frame
     subcode: main
+	$call load_lex
+	$include math
+	$uselib m
+
 	$if argc>1
 	    $call calc_cmdline
 	$else
 	    $call calc_readline
-
 
 subcode: calc_cmdline
     s_line=malloc(4096)
@@ -20,22 +26,20 @@ subcode: calc_cmdline
 	strcat(s_line, " ")
 	strcat(s_line, argv[i])
     $call local_input, $(input), s_line
-    $if tp_a=parse_expression()
-	print "    %g\n", *tp_a
-	free(tp_a)
-	
+
+    $list parse_expression
+    $if parse_expression()
+	$print "    %g\n", f_value
 
 subcode: calc_readline
     # &call simple_input
     &call readline_input
 	$call local_input, $(input), s_line
 
-	$local double * tp_a
 	$if match_keyword("quit")
 	    break
-	$elif tp_a=parse_expression()
-	    print "    %g\n", *tp_a
-	    free(tp_a)
+	$elif parse_expression()
+	    $print "    %g\n", f_value
 
 # ------------------------------------
 subcode: simple_input
@@ -54,56 +58,47 @@ subcode: readline_input
 	free(s_line)
 
 # ------------------------------------
-subcode: parse_return_type
-    $return_type double *
-    $local double * tp_a
-    $local double * tp_b
-
-subcode: do_binary_op(op)
-    *tp_a $(op)= *tp_b
-
-# ------------------------------------
 subcode: parse_exp_list
-    $call local_darray, double, explist
-    $if tp_a=parse_expression()
-	$call da_push, explist, *tp_a
-	free(tp_a)
+    $local darray explist: double
+    $if parse_expression()
+	explist.$push f_value
 	skip_space()
 	$while match_char(',')
-	    $if tp_a=parse_expression()
-		$call da_push, explist, *tp_a
-		free(tp_a)
+	    $if parse_expression()
+		explist.$push f_value
 	    skip_space()
 
+fncode: check_symbol(ts_token)
+    $if ts_token $eq "pi" 
+	f_value=3.1415926535
+	return 1
+    return 0
+
 subcode: do_function_call
-    tp_a=malloc(sizeof(double))
-    *tp_a=0.0
-    $if ts_token eq "pi" 
-	*tp_a=3.1415926535
+    f_value=0.0
     $map trig_call, sin, cos, tan 
     $map trig_inv_call, asin, acos, atan
     $map simple_call, sqrt, exp, log10, log
     &call single_call, abs
-	*tp_a=fabs(explist[0])
+	f_value=fabs(explist[0])
     $else
-	print "    Function not supported: %s", ts_token
-    $call darray_clear, explist
+	$print "    Function not supported: %s", symbol
 
 subcode: single_call(name)
-    $elif ts_token eq "$(name)"
+    $case symbol $eq "$(name)"
 	$if explist_len==1
 	    BLOCK
 	$else
-	    print "    Function $(name) only accepts single argument"
+	    $print "    Function $(name) only accepts single argument"
 
 subcode: simple_call(name)
     &call single_call, $(name)
-	*tp_a=$(name)(explist[0])
+	f_value=$(name)(explist[0])
 
 subcode: trig_call(name)
     &call single_call, $(name)
-	*tp_a=$(name)(explist[0]*3.1415926535/180.0)
+	f_value=$(name)(explist[0]*3.1415926535/180.0)
 
 subcode: trig_inv_call(name)
     &call single_call, $(name)
-	*tp_a=$(name)(explist[0])/3.1415926535*180.0
+	f_value=$(name)(explist[0])/3.1415926535*180.0

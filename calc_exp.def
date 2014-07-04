@@ -1,15 +1,14 @@
-include: calc_lex.def
-
-include: DefParser/parser.def
-include: DefParser/parser_pattern.def
+# include: DefParser/parser.def
+# include: DefParser/parser_pattern.def
 
 subcode:: _autoload
     $global n_prec
-    $list parse_expression
 
 # -----------------------------------------
 fncode: parse_expression
-    $return_type double *
+    $return_type int
+    $global f_value
+    f_value=0.0
     return parse_add()
 
     # ---------------
@@ -24,79 +23,85 @@ fncode: parse_expression
     &call op_left, mult, pow, '*', '/', '%'
 	$if *ts_op=='*'
 	    $call do_binary_op, *
-	$elif *ts_op=='%'
+	$elif *ts_op=='/'
 	    $call do_binary_op, /
 	$else
-	    *tp_a=(int)(*tp_a) % (int)(*tp_b)
+	    f_value=(int)tf_a % (int)tf_b
 
     &call op_right, pow, prime, '^'
-	*tp_a = pow(*tp_a, *tp_b)
+	f_value = pow(tf_a, tf_b)
 
 fncode: parse_prime
     $list match_Number
-    $call parse_return_type
 
     $call input_start
     $if match_char('(')
 	$call input_start
-	tp_a=parse_expression()
+	f_value=parse_expression()
 	$call expect, ')'
-	return tp_a
-    $elif tp_a=match_Number()
-	return tp_a
+	return 1
+    $elif match_Number()
+	return 1
     $elif match_identifier()
-	tp_a=NULL
 	$call get_ts_token
-	skip_space()
-	tb_has_bracket=0
-	$if match_char('(')
-	    tb_has_bracket=1
-	$call @parse_exp_list
-	$if tb_has_bracket
-	    $fcall match_bracket('(')
-	$call @do_function_call
-	return tp_a
+	$list check_symbol
+	$if check_symbol(ts_token)
+	    return 1
+	$else
+	    $global string symbol
+	    symbol.$set ts_token
+	    skip_space()
+	    tb_has_bracket=0
+	    $if match_char('(')
+		tb_has_bracket=1
+	    $call @parse_exp_list
+	    $if tb_has_bracket
+		$fcall match_bracket('(')
+	    $call @do_function_call
+	return 1
     $else
-	return NULL
+	return 0
 	
 # -------------------------------------
 subcode: debug_fcall
     # print Running $(FunctionName) ...
 
+# ------------------------------------
+subcode: do_binary_op(op)
+    f_value = tf_a $(op) tf_b
+
 subcode: op_left(name, parse, @op_list)
     $call build_op_macro, $(op_list)
     $function parse_$(name)
-	$call parse_return_type
-	$if tp_a=parse_$(parse)()
+	$if parse_$(parse)()
+	    tf_a=f_value
 	    $call input_start
 	    $while $(op)
 		ts_op=$(input)->buffer+$(input)->n_start
 		skip_space()
-		tp_b=parse_$(parse)()
-		$if !tp_b
+		$if !parse_$(parse)()
 		    $call @parse_error, parse_$(parse)
+		tf_b=f_value
 		BLOCK
-		free(tp_b)
 		$call input_start
-	    return tp_a
+	    return 1
 	$else
-	    return NULL
+	    return 0
 
 subcode: op_right(name, parse, @op_list)
     $call build_op_macro, $(op_list)
     $function parse_$(name)
-	$call parse_return_type
-	$if tp_a=parse_$(parse)()
+	$if parse_$(parse)()
+	    tf_a=f_value
 	    $call input_start
 	    $if $(op)
 		ts_op=$(input)->buffer+$(input)->n_start
 		skip_space()
-		tp_b=parse_$(name)()
-		$if !tp_b
+		$if !parse_$(name)()
 		    $call @parse_error, parse_$(parse)
+		tf_b=f_value
 		BLOCK
-		free(tp_b)
 		$call input_start
-	    return tp_a
+	    return 1
 	$else
-	    return NULL
+	    return 0
