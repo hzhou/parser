@@ -9,6 +9,7 @@ macros:
     input: calc_input
 
 page: calc, basic_frame
+    # debug: 1
     subcode: main
 	$call load_lex
 	$include math
@@ -25,7 +26,7 @@ subcode: calc_cmdline
     $for i=2:argc
 	strcat(s_line, " ")
 	strcat(s_line, argv[i])
-    $call local_input, $(input), s_line
+    $call local_input, s_line
 
     $list parse_expression
     $if parse_expression()
@@ -34,7 +35,7 @@ subcode: calc_cmdline
 subcode: calc_readline
     # &call simple_input
     &call readline_input
-	$call local_input, $(input), s_line
+	$call local_input, s_line
 
 	$if match_keyword("quit")
 	    break
@@ -69,7 +70,9 @@ subcode: parse_exp_list
 	    skip_space()
 
 fncode: check_symbol(ts_token)
-    $if ts_token $eq "pi" 
+    $if ts_token $eq "ans"
+	return 1
+    $elif ts_token $eq "pi" 
 	f_value=3.1415926535
 	return 1
     return 0

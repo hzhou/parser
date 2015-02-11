@@ -8,7 +8,6 @@ subcode:: _autoload
 fncode: parse_expression
     $return_type int
     $global f_value
-    f_value=0.0
     return parse_add()
 
     # ---------------
@@ -37,7 +36,7 @@ fncode: parse_prime
     $call input_start
     $if match_char('(')
 	$call input_start
-	f_value=parse_expression()
+	parse_expression()
 	$call expect, ')'
 	return 1
     $elif match_Number()
@@ -83,6 +82,9 @@ subcode: op_left(name, parse, @op_list)
 		    $call @parse_error, parse_$(parse)
 		tf_b=f_value
 		BLOCK
+		$(if:debug)
+		    $print parse_$(name): a = $tf_a, b = $tf_b, ans = $f_value
+		tf_a=f_value
 		$call input_start
 	    return 1
 	$else
@@ -101,6 +103,8 @@ subcode: op_right(name, parse, @op_list)
 		    $call @parse_error, parse_$(parse)
 		tf_b=f_value
 		BLOCK
+		$(if:debug)
+		    $print parse_$(name): a = $tf_a, b = $tf_b, ans = $f_value
 		$call input_start
 	    return 1
 	$else

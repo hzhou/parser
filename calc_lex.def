@@ -1,5 +1,6 @@
 # -------------------------------------
 fncode: match_Number
+    $return_type int
     $local double tf_val=0.0
     $local int tn_val=0
 
