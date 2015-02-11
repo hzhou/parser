@@ -6,12 +6,11 @@ include: calc_exp.def
 
 macros:
     use_double: 1
-    input: calc_input
 
 page: calc, basic_frame
     # debug: 1
     subcode: main
-	$call load_lex
+	# $call load_lex
 	$include math
 	$uselib m
 

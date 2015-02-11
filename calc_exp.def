@@ -6,8 +6,11 @@ subcode:: _autoload
 
 # -----------------------------------------
 fncode: parse_expression
-    $return_type int
+    return: int
+    lexical: input
+
     $global f_value
+    $set_function_defaults prepend:input, parse_add, parse_mult, parse_pow
     return parse_add()
 
     # ---------------
@@ -31,6 +34,7 @@ fncode: parse_expression
 	f_value = pow(tf_a, tf_b)
 
 fncode: parse_prime
+    lexical: input
     $list match_Number
 
     $call input_start
@@ -71,12 +75,12 @@ subcode: do_binary_op(op)
 
 subcode: op_left(name, parse, @op_list)
     $call build_op_macro, $(op_list)
-    $function parse_$(name)
+    $function parse_$(name)(input)
 	$if parse_$(parse)()
 	    tf_a=f_value
 	    $call input_start
 	    $while $(op)
-		ts_op=$(input)->buffer+$(input)->n_start
+		ts_op=input->buffer+input->n_start
 		skip_space()
 		$if !parse_$(parse)()
 		    $call @parse_error, parse_$(parse)
@@ -92,12 +96,12 @@ subcode: op_left(name, parse, @op_list)
 
 subcode: op_right(name, parse, @op_list)
     $call build_op_macro, $(op_list)
-    $function parse_$(name)
+    $function parse_$(name)(input)
 	$if parse_$(parse)()
 	    tf_a=f_value
 	    $call input_start
 	    $if $(op)
-		ts_op=$(input)->buffer+$(input)->n_start
+		ts_op=input->buffer+input->n_start
 		skip_space()
 		$if !parse_$(name)()
 		    $call @parse_error, parse_$(parse)
