@@ -8,16 +8,14 @@ macros:
     use_double: 1
 
 page: calc, basic_frame
-    # debug: 1
-    subcode: main
-	# $call load_lex
-	$include math
-	$uselib m
+    # $call load_lex
+    $include math
+    $uselib m
 
-	$if argc>1
-	    $call calc_cmdline
-	$else
-	    $call calc_readline
+    $if argc>1
+	$call calc_cmdline
+    $else
+	$call calc_readline
 
 subcode: calc_cmdline
     s_line=malloc(4096)
