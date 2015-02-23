@@ -12,6 +12,8 @@ page: calc, basic_frame
     $include math
     $uselib m
 
+    $call @calc_init
+
     $if argc>1
 	$call calc_cmdline
     $else
@@ -25,9 +27,8 @@ subcode: calc_cmdline
 	strcat(s_line, argv[i])
     $call local_input, s_line
 
-    $list parse_expression
     $if parse_expression()
-	$print "    %g\n", f_value
+	print_value()
 
 subcode: calc_readline
     # &call simple_input
@@ -37,7 +38,7 @@ subcode: calc_readline
 	$if match_keyword("quit")
 	    break
 	$elif parse_expression()
-	    $print "    %g\n", f_value
+	    print_value()
 
 # ------------------------------------
 subcode: simple_input

@@ -1,14 +1,12 @@
-# -------------------------------------
 fncode: match_Number
-    lexical: input
-    return: int
+    lexical: input, T t
+
     $local double tf_val=0.0
     $local int tn_val=0
 
     $call input_get_c, tn_c
     $if !isdigit(tn_c)
-	$if tn_c>0
-	    $call input_back_char
+	input_back_char(input)
 	return 0
     $else
 	$if tn_c=='0'
@@ -20,10 +18,9 @@ fncode: match_Number
 	    $elif tn_c=='b' || tn_c=='B'
 		tn_matched=2
 		$call @match_binary
-	    $if tn_c>0
-		$call input_back_char
+	    input_back_char(input)
 	    $if tn_matched>0
-		f_value=(double)tn_val
+		set_value_int(t, tn_val)
 		return 1
 	$else
 	    tn_val=tn_c-'0'
@@ -45,14 +42,13 @@ fncode: match_Number
 	    $else
 		tn_matched=1
 
-	    $if tn_c>0
-		$call input_back_char
+	    input_back_char(input)
 
 	    $if tn_matched==1
-		f_value=(double)tn_val
+		set_value_int(t, tn_val)
 		return 1
 	    $elif tn_matched==2
-		f_value=tf_val
+		set_value_int(t, tf_val)
 		return 1
 
 subcode: match_hexdecimal

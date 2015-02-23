@@ -1,115 +1,87 @@
-# include: DefParser/parser.def
-# include: DefParser/parser_pattern.def
-
-subcode:: _autoload
-    $global n_prec
-
-# -----------------------------------------
 fncode: parse_expression
     return: int
-    lexical: input
+    lexical: input, T t
 
-    $global f_value
-    $set_function_defaults prepend:input, parse_add, parse_mult, parse_pow
-    return parse_add()
-
-    # ---------------
-    $list parse_prime
-
-    &call op_left, add, mult, '+', '-'
-	$if *ts_op=='+'
-	    $call do_binary_op, +
-	$else
-	    $call do_binary_op, -
-
-    &call op_left, mult, pow, '*', '/', '%'
-	$if *ts_op=='*'
-	    $call do_binary_op, *
-	$elif *ts_op=='/'
-	    $call do_binary_op, /
-	$else
-	    f_value=(int)tf_a % (int)tf_b
-
-    &call op_right, pow, prime, '^'
-	f_value = pow(tf_a, tf_b)
-
-fncode: parse_prime
-    lexical: input
-    $list match_Number
-
-    $call input_start
-    $if match_char('(')
+    $while 1
 	$call input_start
-	parse_expression()
-	$call expect, ')'
-	return 1
-    $elif match_Number()
-	return 1
-    $elif match_identifier()
-	$call get_ts_token
-	$list check_symbol
-	$if check_symbol(ts_token)
-	    return 1
-	$else
-	    $global string symbol
-	    symbol.$set ts_token
+	$if match_char('(')
+	    $call input_start
+	    parse_expression()
+	    $call expect, ')'
+	    $call check_push_stack, atom
+	$call @match_operators
+	$elif match_Number()
+	    $call check_push_stack, atom
+	$elif match_identifier()
+	    $call get_ts_token
 	    skip_space()
-	    tb_has_bracket=0
 	    $if match_char('(')
-		tb_has_bracket=1
-	    $call @parse_exp_list
-	    $if tb_has_bracket
-		$fcall match_bracket('(')
-	    $call @do_function_call
-	return 1
-    $else
-	return 0
-	
-# -------------------------------------
-subcode: debug_fcall
-    # print Running $(FunctionName) ...
-
-# ------------------------------------
-subcode: do_binary_op(op)
-    f_value = tf_a $(op) tf_b
-
-subcode: op_left(name, parse, @op_list)
-    $call build_op_macro, $(op_list)
-    $function parse_$(name)(input)
-	$if parse_$(parse)()
-	    tf_a=f_value
-	    $call input_start
-	    $while $(op)
-		ts_op=input->buffer+input->n_start
-		skip_space()
-		$if !parse_$(parse)()
-		    $call @parse_error, parse_$(parse)
-		tf_b=f_value
-		BLOCK
-		$(if:debug)
-		    $print parse_$(name): a = $tf_a, b = $tf_b, ans = $f_value
-		tf_a=f_value
-		$call input_start
-	    return 1
+		$call @parse_expression_list
+		$call expect, ')'
+		$call do_function_call
+		$call check_push_stack, atom
+	    $else
+		$call @find_constant
+		$call check_push_stack, atom
 	$else
-	    return 0
-
-subcode: op_right(name, parse, @op_list)
-    $call build_op_macro, $(op_list)
-    $function parse_$(name)(input)
-	$if parse_$(parse)()
-	    tf_a=f_value
-	    $call input_start
-	    $if $(op)
-		ts_op=input->buffer+input->n_start
-		skip_space()
-		$if !parse_$(name)()
-		    $call @parse_error, parse_$(parse)
-		tf_b=f_value
-		BLOCK
-		$(if:debug)
-		    $print parse_$(name): a = $tf_a, b = $tf_b, ans = $f_value
-		$call input_start
+	    $call wrap_stack
 	    return 1
+
+#----------------------------------------------- 
+subcode: check_push_stack(type)
+    $(if:type=atom)
+	$if p_last && p_last->type==T_OP_UNARY
+	    $if value.type==T_INT
+		$call get_value, int
+		$call set_value, int, -$(v)
+	    p_last->type=value.type
+	    memcpy(value.data, p_last->data, 16)
 	$else
-	    return 0
+	    $call push_stack
+    $(else)
+	$(set:prec=$(type))
+	$if p_last_2 && p_last_2->type==T_OPERATOR && p_last_2->$(OP_P)>=$(prec)
+	    $call reduce_stack
+	$call push_stack
+
+subcode: wrap_stack
+    $while p_last_2 && p_last_2->type==T_OPERATOR
+	$call reduce_stack
+
+subcode: reduce_stack
+    $if $map p_last_2->$(OP_V)==$1, '+'|'-'|'*'|'/'
+	$local struct stack_node * p
+	p=p_last_2->prev
+	$if p->type==T_INT && p_last->type==T_INT
+
+fncode: reduce_stack(struct stack_node * p)
+    $local struct stack_node * p1
+    $local struct stack_node * p2
+    p1=p->prev
+    p2=p1->prev
+
+#----------------------------------------------- 
+subcode:: match_operators
+    $(set:unary_context=n_stack_size==0 || stack[-1].type==T_OPERATOR)
+    $elif ($(unary_context)) && match_char('-')
+	$call set_global_value, T_OP_UNARY, int, '-'
+	$call check_push_stack, unary
+
+subcode:: match_operators
+    $call match_op_char, +, 1
+    $call match_op_char, -, 1
+    $call match_op_char, *, 2
+
+subcode: match_op_char(op, precedence)
+    $elif match_char('$(op)')
+	$call set_global_operator, '$(op)', $(precedence)
+	$call check_push_stack, $(precedence)
+
+subcode: match_op(op, name, precedence)
+    $elif match_keyword("$(op)")
+	$(if:!$(name))
+	    $(autoinc:operator_type)
+	    $define($(name)) $(operator_type)+128
+	$call set_global_operator, $(name), $(precdence)
+	$call check_push_stack, $(precedence)
+
