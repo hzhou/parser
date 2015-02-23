@@ -1,0 +1,54 @@
+subcode:: _autoload
+    $global n_prec
+
+    $struct(value_t) int type, char data[16], prev
+    $typedef struct value_t * T
+    $map define_type, T_INVALID, T_OPERATOR, T_INT, T_DOUBLE
+
+subcode: define_type(T)
+    $(if:!$(T))
+	$(autoinc:value_type)
+	$define($(T)) $(value_type)
+	$(setmacro:$(T)=1)
+
+#-------------------------------------------- 
+fncode: set_value_int(T t, int v)
+    t->type=T_INT
+    *((int *)&(t->data[0]))=v
+
+fncode: set_value_double(T t, double v)
+    t->type=T_DOUBLE
+    *((double *)&(t->data[0]))=v
+
+fncode: get_value_int(T t)
+    $return_type int
+    return *((int*)&(t->data[0]))
+
+fncode: get_value_double(T t)
+    $return_type double
+    return *((double*)&(t->data[0]))
+
+#----
+fncode: set_value_operator(T t, char op, int precedence)
+    t->type=T_OPERATOR
+    t->data[0]=op
+    t->data[1]=precedence
+
+#----
+fncode: print_value(T t)
+    $if t->type==T_INT
+	printf " %d\n", get_value_int(t)
+    $elif t->type==T_DOUBLE
+	printf " %g\n", get_value_double(t)
+
+#-------------------------------------------- 
+subcode: local_stack
+    $local T t=NULL
+
+subcode: local_stack_new
+    $local T temp
+    $allocate temp
+    temp->type=T_INVALID
+    temp->prev=t
+    t=temp
+
