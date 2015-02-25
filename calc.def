@@ -1,0 +1,62 @@
+include: c/darray.def
+include: DefParser.def
+
+include: calc_lex.def
+include: calc_exp.def
+include: types.def
+
+macros:
+    use_double: 1
+
+page: calc, basic_frame
+    # $call load_lex
+    $include math
+    $uselib m
+
+    $local struct value_t value, T t
+    t=&value
+
+    $call @calc_init
+
+    $if argc>1
+	$call calc_cmdline
+    $else
+	$call calc_readline
+
+subcode: calc_cmdline
+    s_line=malloc(4096)
+    strcpy(s_line, argv[1])
+    $for i=2:argc
+	strcat(s_line, " ")
+	strcat(s_line, argv[i])
+    $call local_input, s_line
+
+    $if parse_expression()
+	print_value(t)
+
+subcode: calc_readline
+    # &call simple_input
+    &call readline_input
+	$call local_input, s_line
+
+	$if match_keyword("quit")
+	    break
+	$elif parse_expression()
+	    print_value(t)
+
+# ------------------------------------
+subcode: simple_input
+    $local s_line[1024]
+    $while fgets(s_line, 1024, stdin)
+	BLOCK
+
+subcode: readline_input
+    $include readline/readline.h
+    $include readline/history.h
+    $uselib readline
+    $local s_line
+    $while s_line=readline("calc > ")
+	add_history(s_line)
+	BLOCK
+	free(s_line)
+

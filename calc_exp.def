@@ -1,87 +1,128 @@
+include: arithmetic.def
+include: calc_fcall.def
+#-------------------------------------------- 
+subcode: local_stack
+    $local T t=NULL
+
+subcode: local_stack_new
+    $local struct value_t * temp
+    $allocate temp
+    temp->type=T_INVALID
+    temp->prev=t
+    t=temp
+
+subcode: local_stack_back
+    temp=t
+    t=t->prev
+    free(temp)
+
+#---------------------------------------- 
 fncode: parse_expression
     return: int
-    lexical: input, T t
+    lexical: input, T ret(t)
 
+    $call local_stack
     $while 1
+        $call local_stack_new
 	$call input_start
-	$if match_char('(')
-	    $call input_start
-	    parse_expression()
-	    $call expect, ')'
-	    $call check_push_stack, atom
-	$call @match_operators
-	$elif match_Number()
-	    $call check_push_stack, atom
-	$elif match_identifier()
-	    $call get_ts_token
-	    skip_space()
-	    $if match_char('(')
-		$call @parse_expression_list
-		$call expect, ')'
-		$call do_function_call
-		$call check_push_stack, atom
-	    $else
-		$call @find_constant
-		$call check_push_stack, atom
-	$else
-	    $call wrap_stack
-	    return 1
+        $(set:unary_context=t->prev==NULL || t->prev->type==T_OPERATOR || t->prev->type == T_OP_UNARY)
+        # $(set:binary_context=t->prev && t-prev->type!=T_OPERATOR)
+        $if $(unary_context)
+            $if match_char('(')
+                $call input_start
+                parse_expression()
+                $call expect, ')'
+                reduce_unary(t)
+            $call @match_op_unary
+            $elif match_Number()
+                reduce_unary(t)
+            $elif match_identifier()
+                $call get_ts_token
+                skip_space()
+                $if match_char('(')
+                    $call @parse_expression_list
+                    $call expect, ')'
+                    $call @do_function_call
+                    reduce_unary(t)
+                $else
+                    $call @find_constant
+                    reduce_unary(t)
+            $else
+                $call local_stack_back
+                $if t && t->type==T_OPERATOR
+                    $call warn, "Syntax Error.\n"
+                break
+        $else
+            $call match_op_char, +, 1
+            $call match_op_char, -, 1
+            $call match_op_char, *, 2
+            $call match_op_char, /, 2
+            $else
+                $call local_stack_back
+                break
+
+
+
+    $if t->type == T_INVALID
+        return 0
+    $else
+        reduce_binary(t)
+        memcpy(ret, t, sizeof(*t))
+        return 1
+
+#---------------------------------------- 
+fncode: reduce_unary(T p)
+    $while p && p->prev && p->prev->type==T_OP_UNARY
+        $local T op
+        op=p->prev
+        $map reduce_unary_op, INT, DOUBLE, COMPLEX
+        p->prev=op->prev
+        free(op)
+
+subcode: reduce_unary_op(type)
+    $case p->type==T_$(type)
+        unary_op_$(type)(p->prev, p)
+
+#---------------------------------------- 
+fncode: reduce_binary(T p)
+    $while p && p->prev && p->prev->type==T_OPERATOR && p->prev->prev
+        $local T op, T p2
+        op=p->prev
+        p2=op->prev
+        $if p->type < p2->type
+            up_convert(p, p2->type)
+        $elif p2->type < p->type
+            up_convert(p2, p->type)
+        NOOP
+        $map reduce_binary_op, INT, DOUBLE, COMPLEX
+        p->prev=p2->prev
+        free(p2)
+        free(op)
+
+subcode: reduce_binary_op(type)
+    $case p->type==T_$(type)
+        binary_op_$(type)(op, p2, p)
 
 #----------------------------------------------- 
-subcode: check_push_stack(type)
-    $(if:type=atom)
-	$if p_last && p_last->type==T_OP_UNARY
-	    $if value.type==T_INT
-		$call get_value, int
-		$call set_value, int, -$(v)
-	    p_last->type=value.type
-	    memcpy(value.data, p_last->data, 16)
-	$else
-	    $call push_stack
-    $(else)
-	$(set:prec=$(type))
-	$if p_last_2 && p_last_2->type==T_OPERATOR && p_last_2->$(OP_P)>=$(prec)
-	    $call reduce_stack
-	$call push_stack
+subcode:: match_op_unary
+    $elif match_char('-')
+	t->type=T_OP_UNARY
+        t->data[0]='-'
 
-subcode: wrap_stack
-    $while p_last_2 && p_last_2->type==T_OPERATOR
-	$call reduce_stack
-
-subcode: reduce_stack
-    $if $map p_last_2->$(OP_V)==$1, '+'|'-'|'*'|'/'
-	$local struct stack_node * p
-	p=p_last_2->prev
-	$if p->type==T_INT && p_last->type==T_INT
-
-fncode: reduce_stack(struct stack_node * p)
-    $local struct stack_node * p1
-    $local struct stack_node * p2
-    p1=p->prev
-    p2=p1->prev
-
-#----------------------------------------------- 
-subcode:: match_operators
-    $(set:unary_context=n_stack_size==0 || stack[-1].type==T_OPERATOR)
-    $elif ($(unary_context)) && match_char('-')
-	$call set_global_value, T_OP_UNARY, int, '-'
-	$call check_push_stack, unary
-
-subcode:: match_operators
-    $call match_op_char, +, 1
-    $call match_op_char, -, 1
-    $call match_op_char, *, 2
-
+#---------------------------------------- 
 subcode: match_op_char(op, precedence)
-    $elif match_char('$(op)')
-	$call set_global_operator, '$(op)', $(precedence)
-	$call check_push_stack, $(precedence)
+    $case match_char('$(op)')
+        set_value_operator(t, '$(op)', $(precedence))
+        $call check_precedence
 
 subcode: match_op(op, name, precedence)
     $elif match_keyword("$(op)")
 	$(if:!$(name))
 	    $(autoinc:operator_type)
 	    $define($(name)) $(operator_type)+128
-	$call set_global_operator, $(name), $(precdence)
-	$call check_push_stack, $(precedence)
+	set_value_operator(t, $(name), $(precedence))
+        $call check_precedence
 
+subcode: check_precedence
+    $if t->prev && t->prev->prev && $(precedence)<=t->prev->prev->data[1]
+        reduce_binary(t->prev)

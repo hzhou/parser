@@ -3,7 +3,9 @@ subcode:: _autoload
 
     $struct(value_t) int type, char data[16], prev
     $typedef struct value_t * T
-    $map define_type, T_INVALID, T_OPERATOR, T_INT, T_DOUBLE
+    $map define_type, T_INVALID, T_OPERATOR, T_OP_UNARY
+    $map define_type, T_INT, T_DOUBLE, T_COMPLEX
+    # $map define_type, T_GMP_I, T_GMP_F, T_GMP_R, T_GMP_C
 
 subcode: define_type(T)
     $(if:!$(T))
@@ -11,22 +13,16 @@ subcode: define_type(T)
 	$define($(T)) $(value_type)
 	$(setmacro:$(T)=1)
 
-#-------------------------------------------- 
-fncode: set_value_int(T t, int v)
-    t->type=T_INT
-    *((int *)&(t->data[0]))=v
+#---------------------------------------- 
+subcode: get_value_int(t)
+    $(export:v=*((int*)&($(t)->data[0])))
 
-fncode: set_value_double(T t, double v)
-    t->type=T_DOUBLE
-    *((double *)&(t->data[0]))=v
+subcode: get_value_double(t)
+    $(export:v=*((double*)&($(t)->data[0])))
 
-fncode: get_value_int(T t)
-    $return_type int
-    return *((int*)&(t->data[0]))
-
-fncode: get_value_double(T t)
-    $return_type double
-    return *((double*)&(t->data[0]))
+subcode: get_value_complex(t)
+    $(export:cr=*((double*)&($(t)->data[0])))
+    $(export:ci=*((double*)&($(t)->data[8])))
 
 #----
 fncode: set_value_operator(T t, char op, int precedence)
@@ -34,21 +30,36 @@ fncode: set_value_operator(T t, char op, int precedence)
     t->data[0]=op
     t->data[1]=precedence
 
-#----
+#---------------------------------------- 
 fncode: print_value(T t)
     $if t->type==T_INT
-	printf " %d\n", get_value_int(t)
+        $call get_value_int, t
+	printf " %d\n", $(v)
     $elif t->type==T_DOUBLE
-	printf " %g\n", get_value_double(t)
+        $call get_value_double, t
+	printf " %g\n", $(v)
 
-#-------------------------------------------- 
-subcode: local_stack
-    $local T t=NULL
+#---------------------------------------- 
+fncode: up_convert(T t1, int type)
+    $if t1->type == T_INT && type == T_DOUBLE
+        $call up_convert_int_to_double, t1
+    $elif t1->type == T_INT && type == T_COMPLEX
+        $call up_convert_int_to_complex, t1
+    $elif t1->type == T_DOUBLE && type == T_COMPLEX
+        $call up_convert_double_to_complex, t1
+    $else
+        $call die, "Failed to up_convert!\n"
 
-subcode: local_stack_new
-    $local T temp
-    $allocate temp
-    temp->type=T_INVALID
-    temp->prev=t
-    t=temp
+subcode: up_convert_int_to_double(t)
+    $(t)->type=T_DOUBLE
+    *((double*)&($(t)->data[0])) = (double) *((int*)&($(t)->data[0]))
+
+subcode: up_convert_int_to_complex(t)
+    $(t)->type=T_COMPLEX
+    *((double*)&($(t)->data[0])) = (double) *((int*)&($(t)->data[0]))
+    *((double*)&($(t)->data[8])) = 0.0
+
+subcode: up_convert_double_to_complex(t)
+    $(t)->type=T_COMPLEX
+    *((double*)&($(t)->data[8])) = 0.0
 

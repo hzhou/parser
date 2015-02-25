@@ -1,4 +1,15 @@
+subcode: set_value_int
+    $(set:vi=*((int*)&(t->data[0])))
+    $(vi)=tn_val
+    t->type=T_INT
+
+subcode: set_value_double
+    $(set:vf=*((double*)&(t->data[0])))
+    $(vf)=tf_val
+    t->type=T_DOUBLE
+
 fncode: match_Number
+    return: int
     lexical: input, T t
 
     $local double tf_val=0.0
@@ -20,7 +31,7 @@ fncode: match_Number
 		$call @match_binary
 	    input_back_char(input)
 	    $if tn_matched>0
-		set_value_int(t, tn_val)
+		$call set_value_int
 		return 1
 	$else
 	    tn_val=tn_c-'0'
@@ -45,10 +56,10 @@ fncode: match_Number
 	    input_back_char(input)
 
 	    $if tn_matched==1
-		set_value_int(t, tn_val)
+		$call set_value_int
 		return 1
 	    $elif tn_matched==2
-		set_value_int(t, tf_val)
+		$call set_value_double
 		return 1
 
 subcode: match_hexdecimal
