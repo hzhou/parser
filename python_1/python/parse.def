@@ -17,7 +17,7 @@ subcode: parse_operator_precedence
         # all unary operators are at the same highest level
         'unary':99       
 
-    # boc_type, any operator after it has to be unary operator
+    # boc_type e.g. openging bracket, allowed after another operator
     boc_type=['(', 'boc', 'eof']
     # atom_type, e.g. "number"
     atom_type=['']
