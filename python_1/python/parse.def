@@ -21,7 +21,7 @@ subcode: parse_operator_precedence
     boc_type=['(', 'boc', 'eof']
     # atom_type, e.g. "number"
     atom_type=['']
-    # only unary_type can happen after boc_type
+    # convertable to unary_type after another operator
     unary_type=[]
     # we also need know the list of right associative operators
     right_precedences=[]
