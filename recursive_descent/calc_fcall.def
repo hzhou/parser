@@ -1,0 +1,100 @@
+subcode: parse_expression_list
+    $local T t_temp, T tlist[10]
+    t_temp=t
+    count=0
+    $call local_stack_new
+    $if parse_expression()
+        $call parse_expression_list_item
+        $while match_char(',')
+            $call local_stack_new
+            parse_expression()
+            $call parse_expression_list_item
+    t=t_temp
+
+subcode: parse_expression_list_item
+    $if count<10
+        tlist[count]=t
+    count++
+    skip_space()
+
+subcode: do_function_call
+    $call @do_function_call_all
+    $for i=0:count
+        $if i<10
+            free(tlist[i])
+
+# ------------------------------------
+subcode: find_constant
+    $if ts_token $eq "pi" 
+        t->type=T_DOUBLE
+        t->u.d=M_PI
+    $elif ts_token $eq "e" 
+        t->type=T_DOUBLE
+	t->u.d=M_E
+    $elif ts_token $eq "i" 
+        t->type=T_COMPLEX
+        t->u.c=I
+    $else
+        t->type=T_INT
+	t->u.i=0
+
+#---------------------------------------- 
+subcode: do_function_call_all
+    $if count==1
+        $if tlist[0]->type == T_COMPLEX
+            $call do_function_call_single_complex
+        $else
+            $call do_function_call_single_double
+
+#-- simple math function: double -------
+subcode: do_function_call_single_double
+    up_convert(tlist[0], T_DOUBLE)
+    t->type=T_DOUBLE
+
+    $map trig_call, sin, cos, tan 
+    $map trig_inv_call, asin, acos, atan
+    $map simple_call, sqrt, exp, log10, log
+    &call single_call, abs
+        t->u.d = fabs(tlist[0]->u.d)
+    $else
+        $print "    Function not supported: %s", ts_token
+
+subcode: single_call(name)
+    $case ts_token $eq "$(name)"
+        BLOCK
+
+subcode: simple_call(name)
+    &call single_call, $(name)
+	t->u.d = $(name)(tlist[0]->u.d)
+
+subcode: trig_call(name)
+    &call single_call, $(name)
+        $if b_degree
+            t->u.d = $(name)(tlist[0]->u.d*M_PI/180.0)
+        $else
+            t->u.d = $(name)(tlist[0]->u.d)
+
+subcode: trig_inv_call(name)
+    &call single_call, $(name)
+        $if b_degree
+            t->u.d = $(name)(tlist[0]->u.d)/M_PI*180.0
+        $else
+            t->u.d = $(name)(tlist[0]->u.d)
+
+#-- simple math function: complex -------
+subcode: do_function_call_single_complex
+    t->type=T_COMPLEX
+    $map simple_call_complex, sqrt, exp, log
+    $map simple_call_complex, sin, cos, tan
+    $map simple_call_complex, asin, acos, atan
+    $map simple_call_complex_real, abs, real, imag
+
+subcode: simple_call_complex(name)
+    &call single_call, $(name)
+	t->u.c = c$(name)(tlist[0]->u.c)
+
+subcode: simple_call_complex_real(name)
+    &call single_call, $(name)
+        t->type=T_DOUBLE
+	t->u.d = c$(name)(tlist[0]->u.c)
+

@@ -94,7 +94,7 @@ fncode: reduce_binary(T p)
         $elif p2->type < p->type
             up_convert(p2, p->type)
         NOOP
-        $map reduce_binary_op, INT, DOUBLE, COMPLEX
+        $map reduce_binary_op, INT, RATIO, DOUBLE, COMPLEX
         p->prev=p2->prev
         free(p2)
         free(op)
@@ -107,7 +107,7 @@ subcode: reduce_binary_op(type)
 subcode:: match_op_unary
     $elif match_char('-')
 	t->type=T_OP_UNARY
-        t->data[0]='-'
+        t->u.op[0]='-'
 
 #---------------------------------------- 
 subcode: match_op_char(op, precedence)
@@ -124,5 +124,5 @@ subcode: match_op(op, name, precedence)
         $call check_precedence
 
 subcode: check_precedence
-    $if t->prev && t->prev->prev && $(precedence)<=t->prev->prev->data[1]
+    $if t->prev && t->prev->prev && $(precedence)<=t->prev->prev->u.op[1]
         reduce_binary(t->prev)

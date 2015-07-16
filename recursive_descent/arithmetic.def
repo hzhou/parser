@@ -1,0 +1,109 @@
+subcode: straight_op(u, opchar)
+    $case op->u.op[0] == '$(opchar)'
+        p2->u.$(u) = p1->u.$(u) $(opchar) p2->u.$(u)
+
+#---------------------------------------- 
+fncode: binary_op_INT(T op, T p1, T p2)
+    $map straight_op(i), +, -, *
+    $elif op->u.op[0] == '/'
+        $local int tu, int td
+        tu=p1->u.i
+        td=p2->u.i
+        $call RATIO_normalize, p2
+
+fncode: binary_op_DOUBLE(T op, T p1, T p2)
+    $map straight_op(d), +, -, *, /
+
+fncode: binary_op_COMPLEX(T op, T p1, T p2)
+    $map straight_op(c), +, -, *, /
+
+#---------------------------------------- 
+macros:
+    vru: $1->u.ratio[0]
+    vrd: $1->u.ratio[1]
+
+fncode: binary_op_RATIO(T op, T p1, T p2)
+    $local int tu, int td
+    $if op->u.op[0] == '+'
+        td=($(vrd:p1))*($(vrd:p2))
+        tu=($(vru:p1))*($(vrd:p2))+($(vru:p2))*($(vrd:p1))
+    $elif op->u.op[0] == '-'
+        td=($(vrd:p1))*($(vrd:p2))
+        tu=($(vru:p1))*($(vrd:p2))-($(vru:p2))*($(vrd:p1))
+    $elif op->u.op[0] == '*'
+        td=($(vrd:p1))*($(vrd:p2))
+        tu=($(vru:p1))*($(vru:p2))
+    $elif op->u.op[0] == '/'
+        td=($(vrd:p1))*($(vru:p2))
+        tu=($(vru:p1))*($(vrd:p2))
+    $call RATIO_normalize, p2
+
+subcode: RATIO_normalize(t)
+    $local int tg
+    $if td<0
+        td=-td
+        tu=-tu
+    tg=gcd(tu, td)
+    $(vru:$(t))=tu/tg
+    $(vrd:$(t))=td/tg
+    $if $(vrd:$(t))==1
+        $(t)->type=T_INT
+    $else
+        $(t)->type=T_RATIO
+
+fncode: gcd(int a, int b)
+    a=abs(a)
+    b=abs(b)
+    $if a<b
+        return gcd(b, a)
+    $elif a==b
+        return a
+    $elif b==0
+        return a
+    $else
+        return gcd(b, a % b)
+
+#---------------------------------------- 
+fncode: unary_op_INT(T op, T p)
+    $if op->u.op[0]=='-'
+        p->u.i=-p->u.i
+
+fncode: unary_op_DOUBLE(T op, T p)
+    $if op->u.op[0]=='-'
+        p->u.d=-p->u.d
+
+fncode: unary_op_COMPLEX(T op, T p)
+    $if op->u.op[0]=='-'
+        p->u.c=-p->u.c
+
+fncode: unary_op_RATIO(T op, T p)
+    $if op->u.op[0]=='-'
+        p->u.ratio[0]=-p->u.ratio[0]
+/*
+#---------------------------------------- 
+fncode: binary_op_COMPLEX(T op, T p1, T p2)
+    $(set:r1=(*((double*)&(p1->data[0]))))
+    $(set:r2=(*((double*)&(p2->data[0]))))
+    $(set:i1=(*((double*)&(p1->data[8]))))
+    $(set:i2=(*((double*)&(p2->data[8]))))
+
+    $if op->data[0] == '+'
+        $(vcr:p2) = $(vcr:p1)+$(vcr:p2)
+        $(vci:p2) = $(vci:p1)+$(vci:p2)
+    $elif op->data[0] == '-'
+        $(vcr:p2) = $(vcr:p1)-$(vcr:p2)
+        $(vci:p2) = $(vci:p1)-$(vci:p2)
+    $elif op->data[0] == '*'
+        $local double tr, double ti
+        tr=$(vcr:p1)*$(vcr:p2)-$(vci:p1)*$(vci:p2)
+        ti=$(vcr:p1)*$(vci:p2)+$(vcr:p2)*$(vci:p1)
+        $(vcr:p2)=tr
+        $(vci:p2)=ti
+    $elif op->data[0] == '/'
+        $local double tr, double ti, double tm
+        tr=$(vcr:p1)*$(vcr:p2)+$(vci:p1)*$(vci:p2)
+        ti=-$(vcr:p1)*$(vci:p2)+$(vcr:p2)*$(vci:p1)
+        tm=$(vcr:p2)*$(vcr:p2)+$(vci:p2)*$(vci:p2)
+        $(vcr:p2)=tr/tm
+        $(vci:p2)=ti/tm
+*/

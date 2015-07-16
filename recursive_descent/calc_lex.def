@@ -1,0 +1,53 @@
+subcode: return_int
+    t->type=T_INT
+    t->u.i=tn_val
+    return true
+
+subcode: return_double
+    t->type=T_DOUBLE
+    t->u.d=tf_val
+    return true
+
+fncode: match_Number
+    return: bool
+    lexical: input, T t
+
+    $local tn_val=0
+    $local tf_val=0.0
+
+    $if /0(\w+)/
+        &call with_input, 1
+            $if /x([0-9a-f]+)$/i
+                $call get_ts_group, 1
+                tn_val=strtol(ts_group, NULL, 16)
+                $call return_int
+            $elif /[bB]([01]+)$/
+                $call get_ts_group, 1
+                tn_val=strtol(ts_group, NULL, 2)
+                $call return_int
+            $elif /[oO]([0-7]+)$/
+                &call with_ts_group, 1
+                    tn_val=strtol(ts_group, NULL, 8)
+                $call return_int
+            $else
+                # error
+    $elif /(\d+)/
+        $call get_ts_group, 1
+        tn_val=atol(ts_group)
+
+        tf_val=tn_val
+        $if /(\.\d+)/
+            &call with_ts_group, 1
+                tf_val+=atof(ts_group)
+            tn_val=-1
+        $if /[eE](-?\d+)/
+            &call with_ts_group, 1
+                tf_val*=pow(10, atol(ts_group))
+            tn_val=-1
+
+        $if tn_val>=0
+            $call return_int
+        $else
+            $call return_double
+    $else
+        return false

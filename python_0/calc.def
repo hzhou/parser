@@ -1,0 +1,77 @@
+#---- simple calculator in python --------------------------------------
+page: calc, basic_frame
+    module: python
+    print calc("1+2*-3")
+
+fncode: calc(src)
+    src_len=len(src)
+    src_pos=0
+    precedence = {'eof':0, '+':1, '-':1, '*':2, '/':2, 'unary': 99}
+    DUMP_STUB regex_compile
+
+    macros:
+        type: stack[$1][1]
+        atom: stack[$1][0]
+        cur_type: cur[1]
+        cur_atom: cur[0]
+
+    stack=[]
+    $while 1
+        #-- lexer ----
+        $do
+            $if_match \s+
+                continue
+
+            $if_match [\d\.]+
+                num = float(m.group(0))
+                cur=( num, "num")
+                break
+
+            $if_match [-+*/]
+                op = m.group(0)
+                cur = (op, op)
+                break
+
+            $if src_len>=src_pos
+                cur = ('', "eof")
+                break
+            #-- error ----
+            t=src[0:src_len]+" - "+src[src_len:]
+            raise Exception(t)
+        #-- reduce ----
+        $do
+            $if $(cur_type)=="num"
+                break
+            #-- some ops are unary operator depending on the stack context
+            $if len(stack)<1 or $(type:-1)!="num"
+                cur = (cur[0], 'unary')
+                break
+            #-- nothing to reduce ----
+            $if len(stack)<2
+                break
+            #-- if less precedence, then reduce ----
+            $if precedence[$(cur_type)]<=precedence[$(type:-2)]
+                $call reduce
+                continue
+        #-- shift ----
+        $if $(cur_type)!="eof"
+            stack.append: cur
+        $else
+            #-- end of stream, return ----
+            $if len(stack)>0
+                return stack[-1][0]
+            $else
+                return None
+    # ---------------------------
+    subcode: reduce
+        $if $(type:-2) == "unary"
+            t = -$(atom:-1)
+            stack[-2:]=[(t, "num")]
+        $map reduce_binary, +, -, *, /
+
+        subcode: reduce_binary(op)
+            $elif $(type:-2)=='$(op)'
+                t = $(atom:-3) $(op) $(atom:-1)
+                stack[-3:]=[(t, "num")]
+            
+

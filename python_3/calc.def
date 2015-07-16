@@ -1,0 +1,37 @@
+include: python/parse.def
+include: macros_calc/setup.def
+
+page: calc, basic_frame
+    module: python
+    print calc("-1+2*-3")
+
+fncode: calc(src)
+    $call parse_operator_precedence
+
+    # ---------------------------
+    subcode: match
+        $if_match \s+
+            continue
+
+        $if_match [\d\.]+
+            num = float(m.group(0))
+            cur=( num, "num")
+            break
+
+        $if_match [-+*/]
+            op = m.group(0)
+            cur = (op, op)
+            break
+
+    # ---------------------------
+    subcode: reduce
+        $if $(type:-2) == "unary"
+            t = -$(atom:-1)
+            stack[-2:]=[(t, "num")]
+        $map reduce_binary, +, -, *, /
+
+        subcode: reduce_binary(op)
+            $elif $(type:-2)=='$(op)'
+                t = $(atom:-3) $(op) $(atom:-1)
+                stack[-3:]=[(t, "num")]
+            

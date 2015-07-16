@@ -1,0 +1,75 @@
+subcode:: _autoload
+    $global n_prec=6
+    $global b_degree=1
+
+
+subcode:: _autoload
+    $include complex
+    # $struct(value_t) int type, char data[16], prev
+    $struct(value_t) int type, union u, prev
+    $union unsigned char op[2], int i, double d, double complex c, int ratio[2]
+    $typedef struct value_t * T
+    $map define_type, T_INVALID, T_OPERATOR, T_OP_UNARY
+    $map define_type, T_INT, T_RATIO, T_DOUBLE, T_COMPLEX
+    # $map define_type, T_GMP_I, T_GMP_F, T_GMP_R, T_GMP_C
+
+subcode: define_type(T)
+    $(if:!$(T))
+	$(autoinc:value_type)
+	$define($(T)) $(value_type)
+	$(setmacro:$(T)=1)
+
+#---------------------------------------- 
+fncode: set_value_operator(T t, unsigned char op, int precedence)
+    t->type=T_OPERATOR
+    t->u.op[0]=op
+    t->u.op[1]=precedence
+
+#---------------------------------------- 
+fncode: print_value(T t)
+    $if t->type==T_INT
+	printf " %d\n", t->u.i
+    $elif t->type==T_DOUBLE
+	printf " %g\n", t->u.d
+    $elif t->type==T_RATIO
+        printf " %d/%d\n", t->u.ratio[0], t->u.ratio[1]
+    $elif t->type==T_COMPLEX
+        printf " %g + %gi\n", creal(t->u.c), cimag(t->u.c)
+
+#---- Up Conversion ------------------------------------ 
+fncode: up_convert(T t1, int type)
+    $if t1->type == type
+        return
+    $call up_convert_case, INT, DOUBLE
+    $call up_convert_case, INT, COMPLEX
+    $call up_convert_case, DOUBLE, COMPLEX
+    $call up_convert_case, INT, RATIO
+    $call up_convert_case, RATIO, DOUBLE
+    $call up_convert_case, RATIO, COMPLEX
+    $else
+        $call die, "Failed to up_convert!\n"
+
+subcode: up_convert_case(F, T)
+    $case t1->type == T_$(F) && type == T_$(T)
+        t1->type=T_$(T)
+        $call up_convert_$(F)_to_$(T), t1
+
+subcode: up_convert_INT_to_DOUBLE(t)
+    $(t)->u.d=$(t)->u.i
+
+subcode: up_convert_INT_to_COMPLEX(t)
+    $(t)->u.c=$(t)->u.i
+
+subcode: up_convert_DOUBLE_to_COMPLEX(t)
+    $(t)->u.c=$(t)->u.d
+
+#---- support ratio (fraction)
+subcode: up_convert_INT_to_RATIO(t)
+    $(t)->u.ratio[1] = 1
+
+subcode: up_convert_RATIO_to_DOUBLE(t)
+    $(t)->u.d = (double)$(t)->u.ratio[0] /$(t)->u.ratio[1]
+
+subcode: up_convert_RATIO_to_COMPLEX(t)
+    $(t)->u.c = (double)$(t)->u.ratio[0] /$(t)->u.ratio[1]
+
