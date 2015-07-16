@@ -1,0 +1,11 @@
+fncode:: calc
+    subcode: precedence
+        '+':1
+        '-':1
+        '*':2
+        '/':2
+
+    subcode: setup
+        atom_type.append: 'num'
+        unary_type.append: '-'
+

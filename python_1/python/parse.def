@@ -1,0 +1,111 @@
+subcode: parse_operator_precedence
+    macros:
+        # to make the tuple reference more readable
+        atom: stack[$1][0]
+        type: stack[$1][1]
+        cur_atom: cur[0]
+        cur_type: cur[1]
+
+    $-: precedence = {STRING[,]}
+        'bof':0  # begin of file
+        'eof':0  # end of file
+        'boc':0  # begin of context, so we can define context in statements
+        '(':0    # opening parenthesis, (, [, or {
+        ')':0    # opening parenthesis, ), ], or }
+        # more (actual) operators will be supplied later
+        $call @precedence 
+        # all unary operators are at the same highest level
+        'unary':99       
+
+    # boc_type, any operator after it has to be unary operator
+    boc_type=['(', 'boc', 'eof']
+    # atom_type, e.g. "number"
+    atom_type=['']
+    # only unary_type can happen after boc_type
+    unary_type=[]
+    # we also need know the list of right associative operators
+    right_precedences=[]
+    $call @setup
+
+    stack=[('', 'bof')]
+
+    &call parse_frame
+        $while 1
+            #- lexer ------
+            $do
+                # inject eof at the end
+                $if src_pos>=src_len
+                    cur = ("", "eof")
+                    break
+                $call @match
+                $call skip_unmatched_char
+
+            #- (check_precedence) -----------------
+            $do
+                $if $(cur_type) in atom_type
+                    #- atom ------------------
+                    $if $(type:-1) in atom_type
+                        print "cur: ", cur
+                        $call error, "two adjacent atoms"
+                $else
+                    #- operator ---------------
+                    $if $(type:-1) not in atom_type
+                        $if $(cur_type) in unary_type
+                            cur=(cur[0], "unary")
+                            break
+                        $elif $(cur_type) in boc_type
+                            break
+                        $else
+                            print "cur: ", cur, "last type: ", $(type:-1)
+                            $call error, "operator in wrong context"
+
+                    $if len(stack)<=1
+                        break
+
+                    $(set:p0=precedence[$(cur_type)])
+                    $(set:p1=precedence[$(type:-2)])
+                    $(set:left=$(p0) not in right_precedences)
+
+                    $if $(p0)<$(p1) or ( $(p0)==$(p1) and $(left) )
+                        $if $(type:-2)=='bof'
+                            break
+                        $call @reduce
+                        continue
+
+            $if cur is None
+                continue
+
+            $call @post_process
+
+            #- (shift) -----------------
+            $if $(cur_type) == "eof"
+                break
+            $elif $(cur_type)
+                stack.append(cur)
+
+        #---- ------------------
+        $(if:hascode:return)
+            $call @return
+        $(else)
+            $call default_return
+
+    # ---------------------
+    subcode: default_return
+        $call @pre_return
+        $if len(stack)!=2
+            $call error, "unreduced parse stack"
+        return stack[1]
+
+    # ---------------------
+    subcode: error(@msg)
+        $print stack: $stack
+        raise Exception($(msg))
+
+    #- parse_frame is to share code with other parser (non-operator based parser)
+    subcode: parse_frame
+        src_len=len(src)
+        src_pos=0
+        BLOCK
+
+        subcode: skip_unmatched_char
+            src_pos+=1
