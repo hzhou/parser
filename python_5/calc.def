@@ -1,0 +1,107 @@
+include: python/parse.def
+include: macros_calc/setup.def
+
+#---- main --------------
+page: calc, basic_frame
+    module: python
+    $(if:0)
+        print calc("-1+2*-3")
+    $(else)
+        $call repl
+
+#---- repl loop ---------
+subcode: repl
+    $import readline
+    $while 1
+        line = raw_input("> ")
+        $if line=="quit"
+            break
+        $else
+            print calc(line)
+
+#---- ------------------
+fncode: calc(src)
+    $call parse_operator_precedence
+
+    #-- match -------------------------
+    subcode: match
+        $if_match \s+
+            continue
+
+        $if_match [\d\.]+
+            num = float(m.group(0))
+            cur=( num, "num")
+            break
+
+        $if_match (
+            cur = ('(', '(')
+            break
+        $if_match )
+            cur = (')', ')')
+            break
+
+        #- operators -------------
+        # ++, --
+        $if_match \+\+|--
+            op = m.group(0)
+            $if $(type:-1) in atom_type
+                t=stack.pop()
+                stack.append: (t, op)
+                continue
+            $else
+                cur = (op, op)
+
+        # - 
+        &call if_match_break, new|in|delete|typeof|void|instanceof
+            op = m.group(0)
+            cur = (op, op)
+        # - 
+        &call if_match_break, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
+            op = m.group(0)
+            cur = (op, op)
+        &call if_match_break, [+\-*/%^&|]=?
+            op = m.group(0)
+            cur = (op, op)
+        &call if_match_break, [,]
+            op = m.group(0)
+            cur = (op, op)
+        # - 
+        &call if_match_break, [~!]
+            op = m.group(0)
+            cur = (op, op)
+
+    #-- reduce -------------------------
+    subcode: reduce
+        $if $(type:-2) == '('
+            cur = stack[-1]
+            stack[-2:]=[]
+        $elif $(type:-2) == "unary"
+            $if $(atom:-2)=='-'
+                t = -$(atom:-1)
+            $elif $(atom:-2)=='!'
+                t =  not $(atom:-1)
+            $elif $(atom:-2)=='~'
+                t = ~int($(atom:-1))
+            stack[-2:]=[(t, "num")]
+        $map reduce_binary, +, -, *, /
+        $map reduce_binary_int, %, <<, >>, ^, &, |
+        $call reduce_binary_2, &&, and
+        $call reduce_binary_2, ||, or
+        $else
+            $call error, "unhandled operator ["+$(type:-2)+"]"
+
+        subcode: reduce_binary(op)
+            $elif $(type:-2)=='$(op)'
+                t = $(atom:-3) $(op) $(atom:-1)
+                stack[-3:]=[(t, "num")]
+
+        subcode: reduce_binary_int(op)
+            $elif $(type:-2)=='$(op)'
+                t = int($(atom:-3)) $(op) int($(atom:-1))
+                stack[-3:]=[(t, "num")]
+            
+        subcode: reduce_binary_2(op, op2)
+            $elif $(type:-2)=='$(op)'
+                t = $(atom:-3) $(op2) $(atom:-1)
+                stack[-3:]=[(t, "num")]
+            
