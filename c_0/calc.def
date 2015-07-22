@@ -1,0 +1,34 @@
+include: c/lex_static.def
+page: calc, basic_frame
+    module: c
+    f_ans = calc("1+2*-3")
+    $print ans = $f_ans
+
+fncode: calc(s)
+    $call local_input, s
+
+    $while 1
+        $do
+            $if match_eof()
+                $call set_cur, eof, 0
+                break
+            $call @match
+
+            c = match_char()
+        $do
+            $if 
+
+
+fncode:: calc
+    $struct(token) float val, int type
+    macros:
+        cur_atom: cur.val
+        cur_type: cur.type
+
+    subcode: set_cur(type, val)
+        $(enum_hash:$(type))
+        $enum(T_$(type)) $(enum)
+
+        cur.type = T_$(type)
+        cur.val  = $(val)
+
