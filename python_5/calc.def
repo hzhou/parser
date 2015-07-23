@@ -13,7 +13,7 @@ page: calc, basic_frame
 subcode: repl
     $import readline
     $while 1
-        line = raw_input("> ")
+        line = input("> ")
         $if line=="quit"
             break
         $else
