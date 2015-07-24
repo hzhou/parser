@@ -40,35 +40,28 @@ fncode: calc(src)
             cur = (')', ')')
             break
 
-        #- operators -------------
-        # ++, --
         $if_match \+\+|--
             op = m.group(0)
             $if $(type:-1) in atom_type
-                t=stack.pop()
-                stack.append: (t, op)
-                continue
+                $call @reduce_postfix
             $else
-                cur = (op, op)
+                stack.append: (op, "unary")
+            continue
 
-        # - 
-        &call if_match_break, new|in|delete|typeof|void|instanceof
-            op = m.group(0)
-            cur = (op, op)
-        # - 
-        &call if_match_break, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
-            op = m.group(0)
-            cur = (op, op)
-        &call if_match_break, [+\-*/%^&|]=?
-            op = m.group(0)
-            cur = (op, op)
-        &call if_match_break, [,]
-            op = m.group(0)
-            cur = (op, op)
-        # - 
-        &call if_match_break, [~!]
-            op = m.group(0)
-            cur = (op, op)
+        #- operators -------------
+        $call match_op, new|in|delete|typeof|void|instanceof
+        $call match_op, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
+        $call match_op, [+\-*/%^&|]=?
+        $call match_op, [,~!\?:]
+
+        subcode: match_op(@pat)
+            $if_match $(pat)
+                op = m.group(0)
+                cur = (op, op)
+                break
+
+        subcode: reduce_postfix
+            pass
 
     #-- reduce -------------------------
     subcode: reduce
@@ -82,11 +75,14 @@ fncode: calc(src)
                 t =  not $(atom:-1)
             $elif $(atom:-2)=='~'
                 t = ~int($(atom:-1))
+            $else
+                $call error, "unhandled unary operator ["+$(atom:-2)+"]"
             stack[-2:]=[(t, "num")]
         $map reduce_binary, +, -, *, /
         $map reduce_binary_int, %, <<, >>, ^, &, |
         $call reduce_binary_2, &&, and
         $call reduce_binary_2, ||, or
+        $call @reduce_other
         $else
             $call error, "unhandled operator ["+$(type:-2)+"]"
 
@@ -105,3 +101,17 @@ fncode: calc(src)
                 t = $(atom:-3) $(op2) $(atom:-1)
                 stack[-3:]=[(t, "num")]
             
+    #-- reduce_conditional ------------
+    subcode:: reduce_other
+        $call reduce_conditional
+
+        subcode: reduce_conditional
+            $elif $(type:-2) == ':'
+                $if len(stack)>5 and $(type:-4)=='?'
+                    $if $(atom:-5)
+                        stack[-5:]=[stack[-3]]
+                    $else
+                        stack[-5:]=[stack[-1]]
+                $else
+                    $call error, "Ternary operators have been messed up."
+

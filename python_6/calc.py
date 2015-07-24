@@ -1,6 +1,8 @@
 import readline
 import re
 
+variables={}
+
 def main():
     while 1:
         line = input("> ")
@@ -62,7 +64,13 @@ def calc(src):
                 src_pos=m.end()
                 op = m.group(0)
                 if stack[-1][1] in atom_type:
-                    pass
+                    if stack[-1][1]!= 'identifier':
+                        print("stack: ", stack);
+                        raise Exception("Only identifier can used with "+op)
+                    if op=="++":
+                        variables[stack[-1][0]] += 1
+                    elif op=="--":
+                        variables[stack[-1][0]] -= 1
                 else:
                     stack.append((op, "unary"))
                 continue
@@ -94,6 +102,12 @@ def calc(src):
                 op = m.group(0)
                 cur = (op, op)
                 break
+            # r"[a-zA-Z_\$]\w*"
+            m = re8.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur = (m.group(0), "identifier")
+                break
             src_pos+=1
             continue
             break
@@ -123,64 +137,32 @@ def calc(src):
                         cur = stack[-1]
                         stack[-2:]=[]
                     elif stack[-2][1] == "unary":
-                        if stack[-2][0]=='-':
-                            t = -stack[-1][0]
-                        elif stack[-2][0]=='!':
-                            t =  not stack[-1][0]
-                        elif stack[-2][0]=='~':
-                            t = ~int(stack[-1][0])
-                        else:
-                            print("stack: ", stack);
-                            raise Exception("unhandled unary operator ["+stack[-2][0]+"]")
+                        t = unary_op(stack[-2][0], stack[-1])
                         stack[-2:]=[(t, "num")]
-                    elif stack[-2][1]=='+':
-                        t = stack[-3][0] + stack[-1][0]
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='-':
-                        t = stack[-3][0] - stack[-1][0]
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='*':
-                        t = stack[-3][0] * stack[-1][0]
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='/':
-                        t = stack[-3][0] / stack[-1][0]
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='%':
-                        t = int(stack[-3][0]) % int(stack[-1][0])
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='<<':
-                        t = int(stack[-3][0]) << int(stack[-1][0])
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='>>':
-                        t = int(stack[-3][0]) >> int(stack[-1][0])
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='^':
-                        t = int(stack[-3][0]) ^ int(stack[-1][0])
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='&':
-                        t = int(stack[-3][0]) & int(stack[-1][0])
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='|':
-                        t = int(stack[-3][0]) | int(stack[-1][0])
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='&&':
-                        t = stack[-3][0] and stack[-1][0]
-                        stack[-3:]=[(t, "num")]
-                    elif stack[-2][1]=='||':
-                        t = stack[-3][0] or stack[-1][0]
-                        stack[-3:]=[(t, "num")]
                     elif stack[-2][1] == ':':
                         if len(stack)>5 and stack[-4][1]=='?':
-                            if stack[-5][0]:
+                            t = get_token_value(stack[-5])
+                            if t:
                                 stack[-5:]=[stack[-3]]
                             else:
                                 stack[-5:]=[stack[-1]]
                         else:
                             print("stack: ", stack);
                             raise Exception("Ternary operators have been messed up.")
+                    elif precedence[stack[-2][1]]==2 and stack[-2][1][-1]=='=':
+                        if stack[-3][1]!= 'identifier':
+                            print("stack: ", stack);
+                            raise Exception("Only identifier can be on the left side of assignment!")
+                        if stack[-2][1]=='=':
+                            t = get_token_value(stack[-1])
+                        else:
+                            op = stack[-2][1][:-1]
+                            t = binary_op(op, stack[-3], stack[-1])
+                        variables[stack[-3][0]] = t
+                        stack[-3:]=[(t, 'num')]
                     else:
-                        print("stack: ", stack);
-                        raise Exception("unhandled operator ["+stack[-2][1]+"]")
+                        t = binary_op(stack[-2][1], stack[-3], stack[-1])
+                        stack[-3:]=[(t, "num")]
                     continue
             break
         if cur is None:
@@ -189,10 +171,78 @@ def calc(src):
             break
         elif cur[1]:
             stack.append(cur)
-    if len(stack)!=2:
+    if stack[-1][1]=='identifier':
+        if stack[-1][0] in variables:
+            return variables[stack[-1][0]]
+        else:
+            return stack[-1]
+    else:
+        return stack[-1][0]
+
+def get_token_value(var):
+    if var[1]=="identifier":
+        if var[0] in variables:
+            return variables[var[0]]
+        else:
+            print("stack: ", stack);
+            raise Exception("variable "+var[0]+" not defined!")
+    else:
+        return var[0]
+
+def unary_op(op, token):
+    t = get_token_value(token)
+    if op =='-':
+        return -t
+    elif op =='!':
+        return not t
+    elif op =='~':
+        return ~int(t)
+    if op =='++' or op == '--':
+        if token[1] != "identifier":
+            print("stack: ", stack);
+            raise Exception(op+" on non-variable!")
+        if op=='++':
+            t+=1
+        else:
+            t-=1
+        variables[token[0]]=t
+        return t
+    else:
         print("stack: ", stack);
-        raise Exception("unreduced parse stack")
-    return stack[1]
+        raise Exception("unary operator "+op+" not supported!")
+
+def binary_op(op, a, b):
+    t_a = get_token_value(a)
+    t_b = get_token_value(b)
+    if 0:
+        pass
+    elif op =='+':
+        return t_a + t_b
+    elif op =='-':
+        return t_a - t_b
+    elif op =='*':
+        return t_a * t_b
+    elif op =='/':
+        return t_a / t_b
+    elif op =='%':
+        return int(t_a) % int(t_b)
+    elif op =='<<':
+        return int(t_a) << int(t_b)
+    elif op =='>>':
+        return int(t_a) >> int(t_b)
+    elif op =='^':
+        return int(t_a) ^ int(t_b)
+    elif op =='&':
+        return int(t_a) & int(t_b)
+    elif op =='|':
+        return int(t_a) | int(t_b)
+    elif op =='&&':
+        return t_a and t_b
+    elif op =='||':
+        return t_a or t_b
+    else:
+        print("stack: ", stack);
+        raise Exception("unhandled operator ["+op+"]")
 
 re1 = re.compile(r"\s+")
 re2 = re.compile(r"[\d\.]+")
@@ -201,5 +251,6 @@ re4 = re.compile(r"new|in|delete|typeof|void|instanceof")
 re5 = re.compile(r"(==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)")
 re6 = re.compile(r"[+\-*/%^&|]=?")
 re7 = re.compile(r"[,~!\?:]")
+re8 = re.compile(r"[a-zA-Z_\$]\w*")
 if __name__ == "__main__":
     main()

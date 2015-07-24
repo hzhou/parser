@@ -1,0 +1,185 @@
+include: python/parse.def
+include: macros_calc/setup.def
+
+#---- main --------------
+page: calc, basic_frame
+    module: python
+    $(if:0)
+        print calc("-1+2*-3")
+    $(else)
+        $call repl
+
+#---- repl loop ---------
+subcode: repl
+    $import readline
+    $while 1
+        line = input("> ")
+        $if line=="quit"
+            break
+        $else
+            print calc(line)
+
+#---- ------------------
+fncode: calc(src)
+    $call parse_operator_precedence
+
+    #-- match -------------------------
+    subcode:: match
+        $if_match \s+
+            continue
+
+        $if_match [\d\.]+
+            num = float(m.group(0))
+            cur=( num, "num")
+            break
+
+        $if_match (
+            cur = ('(', '(')
+            break
+        $if_match )
+            cur = (')', ')')
+            break
+
+        $if_match \+\+|--
+            op = m.group(0)
+            $if $(type:-1) in atom_type
+                $call @reduce_postfix
+            $else
+                stack.append: (op, "unary")
+            continue
+
+        #- operators -------------
+        $call match_op, new|in|delete|typeof|void|instanceof
+        $call match_op, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
+        $call match_op, [+\-*/%^&|]=?
+        $call match_op, [,~!\?:]
+
+        subcode: match_op(@pat)
+            $if_match $(pat)
+                op = m.group(0)
+                cur = (op, op)
+                break
+
+    #-- reduce -------------------------
+    subcode: reduce
+        $if $(type:-2) == '('
+            cur = stack[-1]
+            stack[-2:]=[]
+        $elif $(type:-2) == "unary"
+            t = unary_op($(atom:-2), stack[-1])
+            stack[-2:]=[(t, "num")]
+        $elif $(type:-2) == ':'
+            $if len(stack)>5 and $(type:-4)=='?'
+                t = get_token_value(stack[-5])
+                $if t
+                    stack[-5:]=[stack[-3]]
+                $else
+                    stack[-5:]=[stack[-1]]
+            $else
+                $call error, "Ternary operators have been messed up."
+        $elif precedence[$(type:-2)]==2 and $(type:-2)[-1]=='='
+            $call reduce_assignment
+        $else
+            t = binary_op($(type:-2), stack[-3], stack[-1])
+            stack[-3:]=[(t, "num")]
+
+    #-- reduce_assignment -----------------
+    subcode: reduce_assignment
+        $if $(type:-3)!= 'identifier'
+            $call error, "Only identifier can be on the left side of assignment!"
+        
+        $if $(type:-2)=='='
+            t = get_token_value(stack[-1])
+        $else
+            op = $(type:-2)[:-1]
+            t = binary_op(op, stack[-3], stack[-1])
+        variables[$(atom:-3)] = t
+        stack[-3:]=[(t, 'num')]
+
+    subcode: reduce_postfix
+        $if $(type:-1)!= 'identifier'
+            $call error, "Only identifier can used with "+op
+        $if op=="++"
+            variables[$(atom:-1)] += 1
+        $elif op=="--"
+            variables[$(atom:-1)] -= 1
+
+    #-- return ------------------
+    subcode: return
+        $if $(type:-1)=='identifier'
+            $if $(atom:-1) in variables
+                return variables[$(atom:-1)]
+            $else
+                return stack[-1]
+        $else
+            return $(atom:-1)
+
+#---- support variables ------------
+fncode:: calc
+    $global variables={}
+
+    #-- match identifiers -------------
+    macros:
+        pat_identifier: [a-zA-Z_\$]\w*
+
+    subcode:: match
+        $if_match $(pat_identifier)
+            cur = (m.group(0), "identifier")
+            break
+
+#---- operations ---------------------
+fncode: get_token_value(var)
+    $if var[1]=="identifier"
+        $if var[0] in variables
+            return variables[var[0]]
+        $else
+            $call error, "variable "+var[0]+" not defined!"
+    $else
+        # --- num -----------------
+        return var[0]
+
+
+fncode: unary_op(op, token)
+    t = get_token_value(token)
+    $if op =='-'
+        return -t
+    $elif op =='!'
+        return not t
+    $elif op =='~'
+        return ~int(t)
+    $if op =='++' or op == '--'
+        $if token[1] != "identifier"
+            $call error, op+" on non-variable!"
+        $if op=='++'
+            t+=1
+        $else
+            t-=1
+        variables[token[0]]=t
+        return t
+    $else
+        $call error, "unary operator "+op+" not supported!"
+
+fncode: binary_op(op, a, b)
+    t_a = get_token_value(a)
+    t_b = get_token_value(b)
+    $if 0
+        pass
+    $map do_binary, +, -, *, /
+    $map do_binary_int, %, <<, >>, ^, &, |
+    $call do_binary_2, &&, and
+    $call do_binary_2, ||, or
+    $else
+        $call error, "unhandled operator ["+op+"]"
+
+    subcode: do_binary(op)
+        $elif op =='$(op)'
+            return t_a $(op) t_b
+
+    subcode: do_binary_int(op)
+        $elif op =='$(op)'
+            return int(t_a) $(op) int(t_b)
+        
+    subcode: do_binary_2(op, op2)
+        $elif op =='$(op)'
+            return t_a $(op2) t_b
+
