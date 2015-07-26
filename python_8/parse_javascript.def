@@ -1,0 +1,164 @@
+include: python/parse.def
+include: macros_javascript/frame.def
+include: macros_javascript/setup.def
+include: macros_javascript/support.def
+include: macros_javascript/operations.def
+
+#---- main --------------
+page: parse_javascript, basic_frame
+    module: python
+
+    &call quote, s
+        a=1
+        1+2*3;
+        !a?2:3
+
+    parse_javascript(s)
+
+#---- ------------------
+fncode: parse_javascript(src)
+    $call parse_operator_precedence
+
+    #-- spaces and comments -----
+    subcode:: match
+        $if $(type:-1) in boc_type
+            $call skip_space_wide
+        $else
+            $call skip_space_narrow
+        $if src_pos>=src_len
+            continue
+
+    #-- end of statement ----
+    subcode:: match
+        $if match_end_of_statement()
+            cur = (';', ';')
+            break
+
+    #---- compound ----------------
+    #-- compound statement ----
+    subcode:: match
+        $if_match {
+            stack.append: ("compound", "boc")
+            continue
+
+        $if_match }
+            $if $(type:-1)=="boc"
+                # empty, need a pseudo atom for reduction logic
+                stack.append: ("", "")
+            cur = ('}', ")")
+            break
+
+    #-- reduce_context compound ----------
+    subcode:: reduce_context
+        $if $(atom:-2)=="compound"
+            got_statement(stack[-1])
+
+    #-- if  ----------------
+    subcode:: match
+        $if_match if
+            $call skip_space_wide
+            $if_match (
+                stack.append: ("if_cond", "boc")
+            $else
+                $call error, "if missing ("
+
+    subcode:: reduce_context
+        $if $(atom:-2)=="if_cond"
+            # got condition in stack[-1]
+            cur = ("if_block", "boc")
+
+    subcode:: on_statement
+        $if stack[-1][0]=="if_block"
+            stack.pop()
+
+
+    #-- match -------------------------
+    subcode:: match
+        $if_match [\d\.]+
+            num = float(m.group(0))
+            cur=( num, "num")
+            break
+
+        $if_match (
+            cur = ('(', '(')
+            break
+        $if_match )
+            cur = (')', ')')
+            break
+
+        $if_match \+\+|--
+            op = m.group(0)
+            $if $(type:-1) in atom_type
+                $call @reduce_postfix
+            $else
+                stack.append: (op, "unary")
+            continue
+
+        #- operators -------------
+        $call match_op, new|in|delete|typeof|void|instanceof
+        $call match_op, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
+        $call match_op, [+\-*/%^&|]=?
+        $call match_op, [,~!\?:]
+
+        subcode: match_op(@pat)
+            $if_match $(pat)
+                op = m.group(0)
+                cur = (op, op)
+                break
+
+    #-- reduce -------------------------
+    subcode: reduce
+        # - group operators ----------
+        $if $(type:-2) == 'boc'
+            cur = None
+            $call @reduce_context
+            stack[-2:] = []
+            break
+        $elif $(type:-2) == '('
+            cur = stack[-1]
+            stack[-2:]=[]
+            break
+        # - normal operators ----------
+        $elif $(type:-2) == ','
+            $call reduce_list
+        $elif $(type:-2) == "unary"
+            t = ( ($(atom:-2), stack[-1]), "unary_exp")
+            stack[-2:]=[t]
+        $elif $(type:-2) == ':'
+            $if len(stack)>5 and $(type:-4)=='?'
+                t = ( (stack[-5], stack[-3], stack[-1]), "conditional_exp")
+                stack[-5:]=[t]
+            $else
+                $call error, "Conditional expression messed up!"
+        $else
+            t = ( ($(type:-2), stack[-3], stack[-1]), "binary_exp")
+            stack[-3:]=[t]
+
+    #-- reduce list --------------
+    subcode: reduce_list
+        t=stack[-3]
+        $if t[1]=="list_exp"
+            t[0].append( stack[-1] )
+        $else
+            t = ( [stack[-3], stack[-1]], "list_exp")
+        stack[-3:]=[t]
+
+    #-- reduce postfix ------------------
+    subcode: reduce_postfix
+        stack[-1] = ( (op, stack[-1]), "postfix_exp")
+
+    #-- post process -------------
+    subcode: post_process
+        $if $(cur_type) == ';'
+            stmt = stack.pop()
+            got_statement(stmt)
+            continue
+
+    fncode: got_statement(stmt)
+        $call @on_statement
+        print stmt
+
+    #-- return ------------------
+    subcode: return
+        return
+

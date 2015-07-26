@@ -1,0 +1,176 @@
+include: python/parse.def
+include: macros_javascript/frame.def
+include: macros_javascript/setup.def
+include: macros_javascript/support.def
+include: macros_javascript/operations.def
+
+#---- main --------------
+page: parse_javascript, basic_frame
+    module: python
+
+    &call quote, s
+        a=1
+        1+2*3;
+        !a?2:3
+
+    parse_javascript(s)
+
+#---- ------------------
+fncode: parse_javascript(src)
+    $call parse_operator_precedence
+
+    #-- spaces and comments -----
+    subcode:: match
+        $if $(type:-1) in boc_type
+            $call skip_space_wide
+        $else
+            $call skip_space_narrow
+        $if src_pos>=src_len
+            continue
+
+    #-- end of statement ----
+    subcode:: match
+        $if match_end_of_statement()
+            cur = (';', ';')
+            break
+
+    #---- compound ----------------
+    #-- compound statement ----
+    subcode:: match
+        $if_match {
+            stack.append: ("compound", "boc")
+            continue
+
+        $if_match }
+            $if $(type:-1)=="boc"
+                # empty, need a pseudo atom for reduction logic
+                stack.append: ("", "")
+            cur = ('}', ")")
+            break
+
+    #-- reduce_context compound ----------
+    subcode:: reduce_context
+        $if $(atom:-2)=="compound"
+            got_statement(stack[-1])
+
+    #-- if  ----------------
+    subcode:: match
+        $if_match if
+            $call skip_space_wide
+            $if_match (
+                stack.append: ("if_cond", "boc")
+            $else
+                $call error, "if missing ("
+
+    subcode:: reduce_context
+        $if $(atom:-2)=="if_cond"
+            # got condition in stack[-1]
+            cur = ("if_block", "boc")
+
+    subcode:: on_statement
+        $if stack[-1][0]=="if_block"
+            stack.pop()
+
+
+    #-- match -------------------------
+    subcode:: match
+        $if_match [\d\.]+
+            num = float(m.group(0))
+            cur=( num, "num")
+            break
+
+        $if_match (
+            cur = ('(', '(')
+            break
+        $if_match )
+            cur = (')', ')')
+            break
+
+        $if_match \+\+|--
+            op = m.group(0)
+            $if $(type:-1) in atom_type
+                $call @reduce_postfix
+            $else
+                stack.append: (op, "unary")
+            continue
+
+        #- operators -------------
+        $call match_op, new|in|delete|typeof|void|instanceof
+        $call match_op, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
+        $call match_op, [+\-*/%^&|]=?
+        $call match_op, [,~!\?:]
+
+        subcode: match_op(@pat)
+            $if_match $(pat)
+                op = m.group(0)
+                cur = (op, op)
+                break
+
+    #-- reduce -------------------------
+    subcode: reduce
+        $if $(type:-2) == 'boc'
+            cur = None
+            $call @reduce_context
+            stack[-2:] = []
+            break
+        $elif $(type:-2) == '('
+            cur = stack[-1]
+            stack[-2:]=[]
+            break
+        $elif $(type:-2) == "unary"
+            t = unary_op($(atom:-2), stack[-1])
+            stack[-2:]=[(t, "num")]
+        $elif $(type:-2) == ':'
+            $call reduce_conditional
+        $elif precedence[$(type:-2)]==2 and $(type:-2)[-1]=='='
+            $call reduce_assignment
+        $else
+            t = binary_op($(type:-2), stack[-3], stack[-1])
+            stack[-3:]=[(t, "num")]
+
+    #-- reduce_conditional ---------------
+    subcode: reduce_conditional
+        $if len(stack)>5 and $(type:-4)=='?'
+            t = get_token_value(stack[-5])
+            $if t
+                stack[-5:]=[stack[-3]]
+            $else
+                stack[-5:]=[stack[-1]]
+        $else
+            $call error, "Ternary operators have been messed up."
+    #-- reduce_assignment -----------------
+    subcode: reduce_assignment
+        $if $(type:-3)!= 'identifier'
+            $call error, "Only identifier can be on the left side of assignment!"
+        
+        $if $(type:-2)=='='
+            t = get_token_value(stack[-1])
+        $else
+            op = $(type:-2)[:-1]
+            t = binary_op(op, stack[-3], stack[-1])
+        variables[$(atom:-3)] = t
+        stack[-3:]=[(t, 'num')]
+
+    subcode: reduce_postfix
+        $if $(type:-1)!= 'identifier'
+            $call error, "Only identifier can used with "+op
+        $if op=="++"
+            variables[$(atom:-1)] += 1
+        $elif op=="--"
+            variables[$(atom:-1)] -= 1
+
+    #-- post process -------------
+    subcode: post_process
+        $if $(cur_type) == ';'
+            stmt = stack.pop()
+            got_statement(stmt)
+            continue
+
+    fncode: got_statement(stmt)
+        $call @on_statement
+        print stmt
+
+    #-- return ------------------
+    subcode: return
+        return
+

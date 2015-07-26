@@ -1,0 +1,38 @@
+fncode:: parse_javascript
+    #-- space and comment -------
+    fncode: skip_space(skip_newline=0)
+        nonlocal src_pos
+        $while src_pos<src_len
+            $if skip_newline
+                $if_match \s+
+                    continue
+            $else
+                $if_match [ \t]+
+                    continue
+            $if_match r"//.*$", re.M
+                continue
+            $if_match r"/\*.*?\*/", re.S
+                continue
+            break
+
+    subcode: skip_space_wide
+        skip_space(1)
+
+    subcode: skip_space_narrow
+        skip_space(0)
+
+    #-- end of statement ------
+    fncode: match_end_of_statement()
+        nonlocal src_pos
+        $if src[src_pos]==';'
+            src_pos+=1
+            $call skip_space_wide
+            return 1
+        $if_match [\r\n]+
+            $call skip_space_wide
+            $(set:type=stack[$1][1])
+            $if $(type:-1) in atom_type
+                $if src_pos>=src_len or re.match(r"[$\w\d_]", src[src_pos])
+                    return 1
+        return 0
+

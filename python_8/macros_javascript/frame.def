@@ -1,0 +1,13 @@
+#---- support variables ------------
+fncode:: parse_javascript
+    $global variables={}
+
+    #-- match identifiers -------------
+    macros:
+        pat_identifier: [a-zA-Z_\$]\w*
+
+    subcode:: match
+        $if_match $(pat_identifier)
+            cur = (m.group(0), "identifier")
+            break
+
