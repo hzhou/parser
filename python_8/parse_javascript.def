@@ -34,25 +34,6 @@ fncode: parse_javascript(src)
             cur = (';', ';')
             break
 
-    #---- compound ----------------
-    #-- compound statement ----
-    subcode:: match
-        $if_match {
-            stack.append: ("compound", "boc")
-            continue
-
-        $if_match }
-            $if $(type:-1)=="boc"
-                # empty, need a pseudo atom for reduction logic
-                stack.append: ("", "")
-            cur = ('}', ")")
-            break
-
-    #-- reduce_context compound ----------
-    subcode:: reduce_context
-        $if $(atom:-2)=="compound"
-            got_statement(stack[-1])
-
     #-- if  ----------------
     subcode:: match
         $if_match if
@@ -71,21 +52,73 @@ fncode: parse_javascript(src)
         $if stack[-1][0]=="if_block"
             stack.pop()
 
-
-    #-- match -------------------------
+    #-- identifiers --------------
     subcode:: match
-        $if_match [\d\.]+
-            num = float(m.group(0))
-            cur=( num, "num")
+        $if_match $(pat_identifier)
+            cur = (m.group(0), "identifier")
             break
 
-        $if_match (
-            cur = ('(', '(')
-            break
-        $if_match )
-            cur = (')', ')')
-            break
 
+    #-- match primary -------------------------
+    subcode:: match
+        #- keyword data -----------
+        &call if_match_break, true|false
+            cur = (m.group(0), "bool")
+        &call if_match_break, null
+            cur = (m.group(0), "null")
+
+        #- string ------------
+        &call if_match_break, \"(([^\\\"]|\\.)*)\"
+            s=js_double_string(m.group(1))
+            cur = (s, "string")
+        &call if_match_break, '(([^\\']|\\.)*)'
+            s=js_single_string(m.group(1))
+            cur = (s, "string")
+        &call if_match_break, /([^\\]|\\.)+/[igm]*
+            cur = (m.group(0), "regex")
+
+        #- numbers ------------
+        &call if_match_break, r"0x[0-9a-f]+", re.I
+            cur = (int(m.group(0), 16), "int")
+        &call if_match_break, r"0[0-7]*", re.I
+            cur = (int(m.group(0), 8), "int")
+        &call if_match_break, (\d+)(\.\d+)?([eE][+-]?\d+)?
+            $if m.group(2) or m.group(3)
+                cur = (float(m.group(0)), "float")
+            $else
+                cur = (int(m.group(1)), "int")
+
+    #-- match brackets -------------------------
+        &call if_match_continue, [\[\(\{]
+            op = m.group(0)
+            $if $(type:-1) in atom_type
+                $if op == '('
+                    $call start_context, fcall
+                $elif op== '['
+                    $call start_context, index
+                $else
+                    $call error, "error opening bracket '"+op+"', forgot ';'?"
+            $else
+                $if op == '{'
+                    $if $(type:-1)=='boc'
+                        $call start_context, compound
+                    $else
+                        $call start_context, object
+                $elif op == '['
+                    $call start_context, array
+                $else # plain old parenthesis!
+                    stack.append: ('(', '(')
+
+        &call if_match_break, [\]\)\}]
+            op = m.group(0)
+            cur = (op, ')')
+            #- operators need to be separated by atom
+            #-   empty brackets is a problem. Hack it.
+            $if $(type:-1)=='(' or $(type:-1)=="boc"
+                stack.append: ('', '')
+
+    #-- match operators -------------------------
+    subcode:: match
         $if_match \+\+|--
             op = m.group(0)
             $if $(type:-1) in atom_type
@@ -94,7 +127,6 @@ fncode: parse_javascript(src)
                 stack.append: (op, "unary")
             continue
 
-        #- operators -------------
         $call match_op, new|in|delete|typeof|void|instanceof
         $call match_op, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
         $call match_op, [+\-*/%^&|]=?
@@ -110,9 +142,7 @@ fncode: parse_javascript(src)
     subcode: reduce
         # - group operators ----------
         $if $(type:-2) == 'boc'
-            cur = None
             $call @reduce_context
-            stack[-2:] = []
             break
         $elif $(type:-2) == '('
             cur = stack[-1]
@@ -146,6 +176,37 @@ fncode: parse_javascript(src)
     #-- reduce postfix ------------------
     subcode: reduce_postfix
         stack[-1] = ( (op, stack[-1]), "postfix_exp")
+
+    #-- reduce context ---------
+    subcode: reduce_context
+        t_op      = cur
+        t_context = $(atom:-2)
+        t_atom    = stack[-1]
+        cur = None
+        stack[-2:]=[]
+        $call pop_context
+        $if 0
+            pass
+        $call @reduce_context_cases
+
+    subcode:: reduce_context_cases
+        $elif t_context == "fcall"
+            stack[-1]=( (stack[-1], t_atom), "fcall")
+        $elif t_context == "index"
+            stack[-1]=( (stack[-1], t_atom), "index")
+        $elif t_context == "array"
+            $if t_atom[1]==""
+                t_atom=[]
+            cur = (t_atom, "array")
+        $elif t_context == "object"
+            $if t_atom[1]==""
+                t_atom=[]
+            cur = (t_atom, "object")
+
+    #-- compound statement ----------
+    subcode:: on_reduce_context
+        $if t_context =="compound"
+            got_statement(t_atom)
 
     #-- post process -------------
     subcode: post_process

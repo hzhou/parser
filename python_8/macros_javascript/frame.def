@@ -1,13 +1,16 @@
-#---- support variables ------------
 fncode:: parse_javascript
-    $global variables={}
-
-    #-- match identifiers -------------
     macros:
         pat_identifier: [a-zA-Z_\$]\w*
 
-    subcode:: match
-        $if_match $(pat_identifier)
-            cur = (m.group(0), "identifier")
-            break
+    #-- context ---------------
+    subcode:: setup
+        context_stack = []
+        cur_context = {type:"global", statements:[]}
 
+    subcode: start_context(type)
+        cur_context = {type:"$(type)"}
+        stack.append: ("$(type)", "boc")
+        context_stack.append: cur_context
+
+    subcode: pop_context
+        cur_context = context_stack.pop()

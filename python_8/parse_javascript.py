@@ -116,12 +116,62 @@ def parse_javascript(src):
                 else:
                     print("stack: ", stack);
                     raise Exception("if missing (")
-            # r"[\d\.]+"
+            # r"true|false"
             m = re7.match(src, src_pos)
             if m:
                 src_pos=m.end()
-                num = float(m.group(0))
-                cur=( num, "num")
+                cur = (m.group(0), "bool")
+                break
+            # r"null\b"
+            m = re8.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur = (m.group(0), "null")
+                break
+            # r"\"(([^\\\"]|\\.)*)\""
+            m = re9.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                r_esc_extra = re.compile(r"\\([^0btnvfrxuX'\"\\])")
+                s = r_esc_extra.sub(r'\1', m.group(0))
+                s = eval(s)
+                cur = (s, "string")
+                break
+            # r"'(([^\\']|\\.)*)'"
+            m = re10.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                r_double = re.compile('(?!\\)"')
+                s = r.sub('\\"', m.group(1))
+                s = eval('"'+s+'"')
+                cur = (s, "string")
+                break
+            # r"/([^\\]|\\.)+/[igm]*"
+            m = re11.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur = (m.group(0), "regex")
+                break
+            # r"0x[0-9a-f]+", re.I
+            m = re12.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur = (int(m.group(0), 16), "int")
+                break
+            # r"0[0-7]*", re.I
+            m = re13.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur = (int(m.group(0), 8), "int")
+                break
+            # r"(\d+)(\.\d+)?([eE][+-]?\d+)?"
+            m = re14.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                if m.group(2) or m.group(3):
+                    cur = (float(m.group(0)), "float")
+                else:
+                    cur = (int(m.group(1)), "int")
                 break
             if src_pos<src_len and src[src_pos]=='(':
                 src_pos+=1
@@ -132,7 +182,7 @@ def parse_javascript(src):
                 cur = (')', ')')
                 break
             # r"\+\+|--"
-            m = re8.match(src, src_pos)
+            m = re15.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
@@ -142,35 +192,35 @@ def parse_javascript(src):
                     stack.append((op, "unary"))
                 continue
             # r"new|in|delete|typeof|void|instanceof"
-            m = re9.match(src, src_pos)
+            m = re16.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
                 cur = (op, op)
                 break
             # r"(==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)"
-            m = re10.match(src, src_pos)
+            m = re17.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
                 cur = (op, op)
                 break
             # r"[+\-*/%^&|]=?"
-            m = re11.match(src, src_pos)
+            m = re18.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
                 cur = (op, op)
                 break
             # r"[,~!\?:]"
-            m = re12.match(src, src_pos)
+            m = re19.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
                 cur = (op, op)
                 break
             # r"[a-zA-Z_\$]\w*"
-            m = re13.match(src, src_pos)
+            m = re20.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 cur = (m.group(0), "identifier")
@@ -317,12 +367,19 @@ re3 = re.compile(r"//.*$", re.M)
 re4 = re.compile(r"/\*.*?\*/", re.S)
 re5 = re.compile(r"[\r\n]+")
 re6 = re.compile(r"if\b")
-re7 = re.compile(r"[\d\.]+")
-re8 = re.compile(r"\+\+|--")
-re9 = re.compile(r"new|in|delete|typeof|void|instanceof")
-re10 = re.compile(r"(==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)")
-re11 = re.compile(r"[+\-*/%^&|]=?")
-re12 = re.compile(r"[,~!\?:]")
-re13 = re.compile(r"[a-zA-Z_\$]\w*")
+re7 = re.compile(r"true|false")
+re8 = re.compile(r"null\b")
+re9 = re.compile(r"\"(([^\\\"]|\\.)*)\"")
+re10 = re.compile(r"'(([^\\']|\\.)*)'")
+re11 = re.compile(r"/([^\\]|\\.)+/[igm]*")
+re12 = re.compile(r"0x[0-9a-f]+", re.I)
+re13 = re.compile(r"0[0-7]*", re.I)
+re14 = re.compile(r"(\d+)(\.\d+)?([eE][+-]?\d+)?")
+re15 = re.compile(r"\+\+|--")
+re16 = re.compile(r"new|in|delete|typeof|void|instanceof")
+re17 = re.compile(r"(==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)")
+re18 = re.compile(r"[+\-*/%^&|]=?")
+re19 = re.compile(r"[,~!\?:]")
+re20 = re.compile(r"[a-zA-Z_\$]\w*")
 if __name__ == "__main__":
     main()
