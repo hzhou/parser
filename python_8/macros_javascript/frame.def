@@ -11,6 +11,7 @@ fncode:: parse_javascript
         cur_context = {type:"$(type)"}
         stack.append: ("$(type)", "boc")
         context_stack.append: cur_context
+        $call @start_context_cases
 
     subcode: pop_context
         cur_context = context_stack.pop()

@@ -2,7 +2,6 @@ fncode:: parse_javascript
     subcode:: precedence
         ';':1
         ',':1
-        ':{':2 # this is the colon used in object literals
         '=':2
         '+=':2
         '-=':2
@@ -54,6 +53,7 @@ fncode:: parse_javascript
         atom_type.extend: literal_type
         atom_type.extend: number_type
         atom_type.extend: expr_type
+        atom_type.append: object_item
 
         is_op_unary = ["~", "!", "delete", "new", "typeof", "void"]
 

@@ -148,18 +148,16 @@ fncode: parse_javascript(src)
             cur = stack[-1]
             stack[-2:]=[]
             break
+        $call @reduce_other
         # - normal operators ----------
         $elif $(type:-2) == ','
             $call reduce_list
         $elif $(type:-2) == "unary"
             t = ( ($(atom:-2), stack[-1]), "unary_exp")
             stack[-2:]=[t]
-        $elif $(type:-2) == ':'
-            $if len(stack)>5 and $(type:-4)=='?'
-                t = ( (stack[-5], stack[-3], stack[-1]), "conditional_exp")
-                stack[-5:]=[t]
-            $else
-                $call error, "Conditional expression messed up!"
+        $elif $(type:-2) == ':' and len(stack)>5 and $(type:-4)=='?'
+            t = ( (stack[-5], stack[-3], stack[-1]), "conditional_exp")
+            stack[-5:]=[t]
         $else
             t = ( ($(type:-2), stack[-3], stack[-1]), "binary_exp")
             stack[-3:]=[t]
@@ -203,7 +201,21 @@ fncode: parse_javascript(src)
                 t_atom=[]
             cur = (t_atom, "object")
 
+    #-- reduce object_item -----
+    subcode:: reduce_other
+        $elif $(type:-2)==':' and cur_context["type"]=="object"
+            $if $(type:-4)==',' or $(type:-4)=="boc"
+                # check $(type:-3) is identifier or string
+                t_name = $(atom:-3)
+                t = ( (t_name, stack[-1]), "object_item"
+            $else
+                $call error, "object colon in the wrong place"
+
     #-- compound statement ----------
+    subcode:: start_context_cases
+        $(if:type=compound)
+            cur_context["statements"]=[]
+
     subcode:: on_reduce_context
         $if t_context =="compound"
             got_statement(t_atom)
@@ -217,7 +229,8 @@ fncode: parse_javascript(src)
 
     fncode: got_statement(stmt)
         $call @on_statement
-        print stmt
+        # print stmt
+        cur_context['statements'].append: stmt
 
     #-- return ------------------
     subcode: return
