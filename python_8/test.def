@@ -1,0 +1,15 @@
+page: test, basic_frame
+    module: python
+
+    $import parse_javascript
+    $(if:0)
+        $import urllib.request
+        f= urllib.request.urlopen("https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js")
+        s = f.read().decode('utf-8')
+    $(else)
+        f = open("jquery.min.js")
+        s=f.read()
+
+    # print s
+    ast = parse_javascript.parse_javascript(s)
+    print ast
