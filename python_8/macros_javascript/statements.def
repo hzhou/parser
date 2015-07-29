@@ -10,7 +10,7 @@ fncode:: parse_javascript
                 $call error, "$(keyword) missing ("
 
     #-- if  ----------------
-    subcode:: match
+    subcode:: match_statements
         &call if_match_continue, if
             $call skip_space_wide
             $if_match (
@@ -45,7 +45,7 @@ fncode:: parse_javascript
                 got_statement(stmt)
 
     #-- while ----------------------------------
-    subcode:: match
+    subcode:: match_statements
         &call match_cond, while
             $call start_context, while_cond
             continue
@@ -61,7 +61,7 @@ fncode:: parse_javascript
             got_statement(stmt)
 
     #-- do while -----------------------------
-    subcode:: match
+    subcode:: match_statements
         &call if_match_continue, do
             $call start_context, do_block
 
@@ -81,7 +81,7 @@ fncode:: parse_javascript
             # cur = (';', ';')
 
     #-- for ------------------------
-    subcode:: match
+    subcode:: match_statements
         &call match_cond, for
             $call start_context, for_cond
             #- for conditions are made up from 3 statements
@@ -103,7 +103,7 @@ fncode:: parse_javascript
             got_statement(stmt)
 
     #-- with ----------------------------------
-    subcode:: match
+    subcode:: match_statements
         &call match_cond, with
             $call start_context, with_cond
             continue
@@ -119,7 +119,7 @@ fncode:: parse_javascript
             got_statement(stmt)
 
     #-- switch ------------------------
-    subcode:: match
+    subcode:: match_statements
         &call match_cond, switch
             $call start_context, switch_cond
             continue
@@ -136,7 +136,7 @@ fncode:: parse_javascript
 
     #-- try/catch/finally ---------------
     #- try  ----------------
-    subcode:: match
+    subcode:: match_statements
         &call if_match_continue, try
             $call skip_space_wide
             $if_match {
@@ -187,7 +187,7 @@ fncode:: parse_javascript
             got_statement(stmt)
 
     #-- var -------------------
-    subcode:: match
+    subcode:: match_statements
         $if_match var
             $call start_context, var
             continue
@@ -198,7 +198,7 @@ fncode:: parse_javascript
             got_statement(stmt)
 
     #-- return -------------------
-    subcode:: match
+    subcode:: match_statements
         $if_match var
             $call start_context, return
             continue
@@ -209,7 +209,7 @@ fncode:: parse_javascript
             got_statement(stmt)
 
     #-- break/continue ------
-    subcode:: match
+    subcode:: match_statements
         &call if_match_continue, break|continue
             type = m.group[0]
             $call skip_space_narrow
@@ -224,7 +224,7 @@ fncode:: parse_javascript
                 $call error, "garbage after "+type
 
     #-- case labels ----
-    subcode:: match
+    subcode:: match_statements
         &call if_match_continue, default
             $call skip_space_wide
             $if_match :
@@ -248,10 +248,21 @@ fncode:: parse_javascript
 
 #---- function ---------------
 fncode:: parse_javascript
-    subcode:: match
-        &call match_cond, function
-            $call start_context, function_param
-            continue
+    subcode:: match_statements
+        $if_match function
+            $call skip_space_wide
+            $if_match (
+                $call start_context, function_param
+                continue
+            $if_match $(pat_identifier)
+                name = m.group(0)
+                $call skip_space_wide
+                $if_match (
+                    $call start_context, function_param
+                    cur_context["name"]=name
+                    continue
+                $else
+                    $call error, "function missing (parameters)"
 
     subcode:: reduce_context_cases
         $elif t_context=="function_param"
@@ -263,6 +274,10 @@ fncode:: parse_javascript
             $else
                 $call error, "function missing {"
         $elif t_context == "function_block"
-            last_context["statements"].append(t_atom)
-            cur = (last_context, "function")
+            $if "name" in cur_context
+                stmt = (last_context, "function")
+                got_statement(stmt)
+            $else
+                last_context["statements"].append(t_atom)
+                cur = (last_context, "function")
 

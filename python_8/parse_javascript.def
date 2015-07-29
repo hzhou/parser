@@ -35,6 +35,9 @@ fncode:: parse_javascript(src)
             cur = (';', ';')
             break
 
+    subcode:: match
+        $call @match_statements
+
     #-- identifiers --------------
     subcode:: match
         $if_match $(pat_identifier)

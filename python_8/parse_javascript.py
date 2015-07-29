@@ -171,8 +171,190 @@ def parse_javascript(src):
             if match_end_of_statement():
                 cur = (';', ';')
                 break
-            # r"[a-zA-Z_\$]\w*"
+            # r"if\b"
+            m = re2.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                skip_space(1)
+                if src_pos<src_len and src[src_pos]=='(':
+                    src_pos+=1
+                    cur_context = {"type":"if_cond"}
+                    stack.append(("if_cond", "boc"))
+                    context_stack.append(cur_context)
+                    cur_context["branch_list"]=[]
+                else:
+                    print("stack: ", stack);
+                    raise Exception("if missing (")
+                continue
+            # r"while\b"
+            m = re3.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                skip_space(1)
+                if src_pos<src_len and src[src_pos]=='(':
+                    src_pos+=1
+                    cur_context = {"type":"while_cond"}
+                    stack.append(("while_cond", "boc"))
+                    context_stack.append(cur_context)
+                    continue
+                else:
+                    print("stack: ", stack);
+                    raise Exception("while missing (")
+            # r"do\b"
             m = re9.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur_context = {"type":"do_block"}
+                stack.append(("do_block", "boc"))
+                context_stack.append(cur_context)
+                continue
+            # r"for\b"
+            m = re10.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                skip_space(1)
+                if src_pos<src_len and src[src_pos]=='(':
+                    src_pos+=1
+                    cur_context = {"type":"for_cond"}
+                    stack.append(("for_cond", "boc"))
+                    context_stack.append(cur_context)
+                    cur_context["statements"]=[]
+                    continue
+                else:
+                    print("stack: ", stack);
+                    raise Exception("for missing (")
+            # r"with\b"
+            m = re11.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                skip_space(1)
+                if src_pos<src_len and src[src_pos]=='(':
+                    src_pos+=1
+                    cur_context = {"type":"with_cond"}
+                    stack.append(("with_cond", "boc"))
+                    context_stack.append(cur_context)
+                    continue
+                else:
+                    print("stack: ", stack);
+                    raise Exception("with missing (")
+            # r"switch\b"
+            m = re12.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                skip_space(1)
+                if src_pos<src_len and src[src_pos]=='(':
+                    src_pos+=1
+                    cur_context = {"type":"switch_cond"}
+                    stack.append(("switch_cond", "boc"))
+                    context_stack.append(cur_context)
+                    continue
+                else:
+                    print("stack: ", stack);
+                    raise Exception("switch missing (")
+            # r"try\b"
+            m = re13.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                skip_space(1)
+                if src_pos<src_len and src[src_pos]=='{':
+                    src_pos+=1
+                    cur_context = {"type":"try_block"}
+                    stack.append(("try_block", "boc"))
+                    context_stack.append(cur_context)
+                    cur_context["statements"]=[]
+                else:
+                    print("stack: ", stack);
+                    raise Exception("try missing {")
+                continue
+            # r"var\b"
+            m = re14.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur_context = {"type":"var"}
+                stack.append(("var", "boc"))
+                context_stack.append(cur_context)
+                continue
+            # r"var\b"
+            m = re14.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur_context = {"type":"return"}
+                stack.append(("return", "boc"))
+                context_stack.append(cur_context)
+                continue
+            # r"break|continue"
+            m = re15.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                type = m.group[0]
+                skip_space(0)
+                # r"[a-zA-Z_\$]\w*"
+                m = re16.match(src, src_pos)
+                if m:
+                    src_pos=m.end()
+                    skip_space(0)
+                    stmt = (m.group[0], type)
+                else:
+                    stmt = (None, type)
+                # r"[;\r\n]+"
+                m = re17.match(src, src_pos)
+                if m:
+                    src_pos=m.end()
+                    got_statement(stmt)
+                else:
+                    print("stack: ", stack);
+                    raise Exception("garbage after "+type)
+                continue
+            # r"default\b"
+            m = re18.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                skip_space(1)
+                if src_pos<src_len and src[src_pos]==':':
+                    src_pos+=1
+                    stmt = (None, "case")
+                    got_statement(stmt)
+                else:
+                    print("stack: ", stack);
+                    raise Exception("default label missing :")
+                continue
+            # r"case\b"
+            m = re19.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                cur_context = {"type":"case"}
+                stack.append(("case", "boc"))
+                context_stack.append(cur_context)
+                continue
+            # r"function\b"
+            m = re20.match(src, src_pos)
+            if m:
+                src_pos=m.end()
+                skip_space(1)
+                if src_pos<src_len and src[src_pos]=='(':
+                    src_pos+=1
+                    cur_context = {"type":"function_param"}
+                    stack.append(("function_param", "boc"))
+                    context_stack.append(cur_context)
+                    continue
+                # r"[a-zA-Z_\$]\w*"
+                m = re16.match(src, src_pos)
+                if m:
+                    src_pos=m.end()
+                    name = m.group(0)
+                    skip_space(1)
+                    if src_pos<src_len and src[src_pos]=='(':
+                        src_pos+=1
+                        cur_context = {"type":"function_param"}
+                        stack.append(("function_param", "boc"))
+                        context_stack.append(cur_context)
+                        cur_context["name"]=name
+                        continue
+                    else:
+                        print("stack: ", stack);
+                        raise Exception("function missing (parameters)")
+            # r"[a-zA-Z_\$]\w*"
+            m = re16.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 cur = (m.group(0), "identifier")
@@ -184,51 +366,51 @@ def parse_javascript(src):
                     continue
                 break
             # r"true|false"
-            m = re10.match(src, src_pos)
+            m = re21.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 cur = (m.group(0), "bool")
                 break
             # r"null\b"
-            m = re11.match(src, src_pos)
+            m = re22.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 cur = (m.group(0), "null")
                 break
             # r"\"(([^\\\"]|\\.)*)\""
-            m = re12.match(src, src_pos)
+            m = re23.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 s=js_double_string(m.group(1))
                 cur = (s, "string")
                 break
             # r"'(([^\\']|\\.)*)'"
-            m = re13.match(src, src_pos)
+            m = re24.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 s=js_single_string(m.group(1))
                 cur = (s, "string")
                 break
             # r"/([^\\]|\\.)+/[igm]*"
-            m = re14.match(src, src_pos)
+            m = re25.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 cur = (m.group(0), "regex")
                 break
             # r"0x[0-9a-f]+", re.I
-            m = re15.match(src, src_pos)
+            m = re26.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 cur = (int(m.group(0), 16), "int")
                 break
             # r"0[0-7]*", re.I
-            m = re16.match(src, src_pos)
+            m = re27.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 cur = (int(m.group(0), 8), "int")
                 break
             # r"(\d+)(\.\d+)?([eE][+-]?\d+)?"
-            m = re17.match(src, src_pos)
+            m = re28.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 if m.group(2) or m.group(3):
@@ -237,7 +419,7 @@ def parse_javascript(src):
                     cur = (int(m.group(1)), "int")
                 break
             # r"[\[\(\{]"
-            m = re18.match(src, src_pos)
+            m = re29.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
@@ -272,7 +454,7 @@ def parse_javascript(src):
                         stack.append(('(', '('))
                 continue
             # r"[\]\)\}]"
-            m = re19.match(src, src_pos)
+            m = re30.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
@@ -287,7 +469,7 @@ def parse_javascript(src):
                     cur = (';', ';')
                 break
             # r"\+\+|--"
-            m = re20.match(src, src_pos)
+            m = re31.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
@@ -297,202 +479,33 @@ def parse_javascript(src):
                     stack.append((op, "unary"))
                 continue
             # r"new|in|delete|typeof|void|instanceof"
-            m = re21.match(src, src_pos)
+            m = re32.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
                 cur = (op, op)
                 break
             # r"(==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)"
-            m = re22.match(src, src_pos)
+            m = re33.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
                 cur = (op, op)
                 break
             # r"[+\-*/%^&|]=?"
-            m = re23.match(src, src_pos)
+            m = re34.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
                 cur = (op, op)
                 break
             # r"[,~!\?]"
-            m = re24.match(src, src_pos)
+            m = re35.match(src, src_pos)
             if m:
                 src_pos=m.end()
                 op = m.group(0)
                 cur = (op, op)
                 break
-            # r"if\b"
-            m = re2.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                skip_space(1)
-                if src_pos<src_len and src[src_pos]=='(':
-                    src_pos+=1
-                    cur_context = {"type":"if_cond"}
-                    stack.append(("if_cond", "boc"))
-                    context_stack.append(cur_context)
-                    cur_context["branch_list"]=[]
-                else:
-                    print("stack: ", stack);
-                    raise Exception("if missing (")
-                continue
-            # r"while\b"
-            m = re3.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                skip_space(1)
-                if src_pos<src_len and src[src_pos]=='(':
-                    src_pos+=1
-                    cur_context = {"type":"while_cond"}
-                    stack.append(("while_cond", "boc"))
-                    context_stack.append(cur_context)
-                    continue
-                else:
-                    print("stack: ", stack);
-                    raise Exception("while missing (")
-            # r"do\b"
-            m = re25.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                cur_context = {"type":"do_block"}
-                stack.append(("do_block", "boc"))
-                context_stack.append(cur_context)
-                continue
-            # r"for\b"
-            m = re26.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                skip_space(1)
-                if src_pos<src_len and src[src_pos]=='(':
-                    src_pos+=1
-                    cur_context = {"type":"for_cond"}
-                    stack.append(("for_cond", "boc"))
-                    context_stack.append(cur_context)
-                    cur_context["statements"]=[]
-                    continue
-                else:
-                    print("stack: ", stack);
-                    raise Exception("for missing (")
-            # r"with\b"
-            m = re27.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                skip_space(1)
-                if src_pos<src_len and src[src_pos]=='(':
-                    src_pos+=1
-                    cur_context = {"type":"with_cond"}
-                    stack.append(("with_cond", "boc"))
-                    context_stack.append(cur_context)
-                    continue
-                else:
-                    print("stack: ", stack);
-                    raise Exception("with missing (")
-            # r"switch\b"
-            m = re28.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                skip_space(1)
-                if src_pos<src_len and src[src_pos]=='(':
-                    src_pos+=1
-                    cur_context = {"type":"switch_cond"}
-                    stack.append(("switch_cond", "boc"))
-                    context_stack.append(cur_context)
-                    continue
-                else:
-                    print("stack: ", stack);
-                    raise Exception("switch missing (")
-            # r"try\b"
-            m = re29.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                skip_space(1)
-                if src_pos<src_len and src[src_pos]=='{':
-                    src_pos+=1
-                    cur_context = {"type":"try_block"}
-                    stack.append(("try_block", "boc"))
-                    context_stack.append(cur_context)
-                    cur_context["statements"]=[]
-                else:
-                    print("stack: ", stack);
-                    raise Exception("try missing {")
-                continue
-            # r"var\b"
-            m = re30.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                cur_context = {"type":"var"}
-                stack.append(("var", "boc"))
-                context_stack.append(cur_context)
-                continue
-            # r"var\b"
-            m = re30.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                cur_context = {"type":"return"}
-                stack.append(("return", "boc"))
-                context_stack.append(cur_context)
-                continue
-            # r"break|continue"
-            m = re31.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                type = m.group[0]
-                skip_space(0)
-                # r"[a-zA-Z_\$]\w*"
-                m = re9.match(src, src_pos)
-                if m:
-                    src_pos=m.end()
-                    skip_space(0)
-                    stmt = (m.group[0], type)
-                else:
-                    stmt = (None, type)
-                # r"[;\r\n]+"
-                m = re32.match(src, src_pos)
-                if m:
-                    src_pos=m.end()
-                    got_statement(stmt)
-                else:
-                    print("stack: ", stack);
-                    raise Exception("garbage after "+type)
-                continue
-            # r"default\b"
-            m = re33.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                skip_space(1)
-                if src_pos<src_len and src[src_pos]==':':
-                    src_pos+=1
-                    stmt = (None, "case")
-                    got_statement(stmt)
-                else:
-                    print("stack: ", stack);
-                    raise Exception("default label missing :")
-                continue
-            # r"case\b"
-            m = re34.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                cur_context = {"type":"case"}
-                stack.append(("case", "boc"))
-                context_stack.append(cur_context)
-                continue
-            # r"function\b"
-            m = re35.match(src, src_pos)
-            if m:
-                src_pos=m.end()
-                skip_space(1)
-                if src_pos<src_len and src[src_pos]=='(':
-                    src_pos+=1
-                    cur_context = {"type":"function_param"}
-                    stack.append(("function_param", "boc"))
-                    context_stack.append(cur_context)
-                    continue
-                else:
-                    print("stack: ", stack);
-                    raise Exception("function missing (")
             src_pos+=1
             continue
             break
@@ -649,8 +662,12 @@ def parse_javascript(src):
                                 print("stack: ", stack);
                                 raise Exception("function missing {")
                         elif t_context == "function_block":
-                            last_context["statements"].append(t_atom)
-                            cur = (last_context, "function")
+                            if "name" in cur_context:
+                                stmt = (last_context, "function")
+                                got_statement(stmt)
+                            else:
+                                last_context["statements"].append(t_atom)
+                                cur = (last_context, "function")
                         break
                     elif stack[-2][1] == '(':
                         cur = stack[-1]
@@ -776,33 +793,33 @@ re5 = re.compile(r"[ \t]+")
 re6 = re.compile(r"//.*$", re.M)
 re7 = re.compile(r"/\*.*?\*/", re.S)
 re8 = re.compile(r"[\r\n]+")
-re9 = re.compile(r"[a-zA-Z_\$]\w*")
-re10 = re.compile(r"true|false")
-re11 = re.compile(r"null\b")
-re12 = re.compile(r"\"(([^\\\"]|\\.)*)\"")
-re13 = re.compile(r"'(([^\\']|\\.)*)'")
-re14 = re.compile(r"/([^\\]|\\.)+/[igm]*")
-re15 = re.compile(r"0x[0-9a-f]+", re.I)
-re16 = re.compile(r"0[0-7]*", re.I)
-re17 = re.compile(r"(\d+)(\.\d+)?([eE][+-]?\d+)?")
-re18 = re.compile(r"[\[\(\{]")
-re19 = re.compile(r"[\]\)\}]")
-re20 = re.compile(r"\+\+|--")
-re21 = re.compile(r"new|in|delete|typeof|void|instanceof")
-re22 = re.compile(r"(==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)")
-re23 = re.compile(r"[+\-*/%^&|]=?")
-re24 = re.compile(r"[,~!\?]")
-re25 = re.compile(r"do\b")
-re26 = re.compile(r"for\b")
-re27 = re.compile(r"with\b")
-re28 = re.compile(r"switch\b")
-re29 = re.compile(r"try\b")
-re30 = re.compile(r"var\b")
-re31 = re.compile(r"break|continue")
-re32 = re.compile(r"[;\r\n]+")
-re33 = re.compile(r"default\b")
-re34 = re.compile(r"case\b")
-re35 = re.compile(r"function\b")
+re9 = re.compile(r"do\b")
+re10 = re.compile(r"for\b")
+re11 = re.compile(r"with\b")
+re12 = re.compile(r"switch\b")
+re13 = re.compile(r"try\b")
+re14 = re.compile(r"var\b")
+re15 = re.compile(r"break|continue")
+re16 = re.compile(r"[a-zA-Z_\$]\w*")
+re17 = re.compile(r"[;\r\n]+")
+re18 = re.compile(r"default\b")
+re19 = re.compile(r"case\b")
+re20 = re.compile(r"function\b")
+re21 = re.compile(r"true|false")
+re22 = re.compile(r"null\b")
+re23 = re.compile(r"\"(([^\\\"]|\\.)*)\"")
+re24 = re.compile(r"'(([^\\']|\\.)*)'")
+re25 = re.compile(r"/([^\\]|\\.)+/[igm]*")
+re26 = re.compile(r"0x[0-9a-f]+", re.I)
+re27 = re.compile(r"0[0-7]*", re.I)
+re28 = re.compile(r"(\d+)(\.\d+)?([eE][+-]?\d+)?")
+re29 = re.compile(r"[\[\(\{]")
+re30 = re.compile(r"[\]\)\}]")
+re31 = re.compile(r"\+\+|--")
+re32 = re.compile(r"new|in|delete|typeof|void|instanceof")
+re33 = re.compile(r"(==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)")
+re34 = re.compile(r"[+\-*/%^&|]=?")
+re35 = re.compile(r"[,~!\?]")
 re36 = re.compile(r"catch\b")
 re37 = re.compile(r"finally\b")
 if __name__ == "__main__":
