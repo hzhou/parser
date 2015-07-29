@@ -38,18 +38,6 @@ fncode:: parse_javascript(src)
     subcode:: match
         $call @match_statements
 
-    #-- identifiers --------------
-    subcode:: match
-        $if_match $(pat_identifier)
-            cur = (m.group(0), "identifier")
-            $call skip_space_narrow
-            $if_match :
-                stmt = (cur[0], "label")
-                got_statement(stmt)
-                continue
-            break
-
-
     #-- match primary -------------------------
     subcode:: match
         #- keyword data -----------
@@ -124,6 +112,13 @@ fncode:: parse_javascript(src)
                 stack.append: (op, "unary")
             continue
 
+        $if_match \.$(pat_identifier)
+            op = m.group(0)
+            $if $(type:-1) in atom_type
+                $call @reduce_postfix
+            $else
+                $call error, "member not following atom"
+
         $call match_op, new|in|delete|typeof|void|instanceof
         $call match_op, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
         $call match_op, [+\-*/%^&|]=?
@@ -134,6 +129,18 @@ fncode:: parse_javascript(src)
                 op = m.group(0)
                 cur = (op, op)
                 break
+
+    #-- identifiers --------------
+    subcode:: match
+        $if_match $(pat_identifier)
+            cur = (m.group(0), "identifier")
+            $call skip_space_narrow
+            $if_match :
+                stmt = (cur[0], "label")
+                got_statement(stmt)
+                continue
+            break
+
 
     #-- reduce -------------------------
     subcode: reduce

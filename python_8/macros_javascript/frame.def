@@ -26,3 +26,26 @@ fncode:: parse_javascript
     #-- return -------------
     subcode: return
         return cur_context
+
+    #-- debug -------------
+    fncode: synopsis(s, N, i, n)
+        i0=i-N
+        i1=i+N
+        t_pre="..."
+        t_post="..."
+
+        $if i0<0
+            i0=0
+            t_pre=""
+        $if i1>n
+            i1=n
+            t_post=""
+
+        return (t_pre+s[i0:i], s[i:i1]+t_post)
+
+    subcode: error(msg)
+        (s0, s1)=synopsis(src, 40, src_pos, src_len)
+        $print source: "$s0" + "$s1" 
+        print "cur: ", cur
+        print "stack: ", stack
+        raise Exception($(msg))

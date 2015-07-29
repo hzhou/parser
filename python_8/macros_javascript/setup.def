@@ -46,6 +46,9 @@ fncode:: parse_javascript
         number_type = ["int", "float", "num"]
         float_type  = ["float"]
 
+        prime_type = ["identifier"]
+        prime_type.extend: literal_type
+
         expr_type   = ["identifier"]
         expr_type.extend: ["binary_exp", "unary_exp", "list_exp", "postfix_exp", "conditional_exp"]
         expr_type.extend: ["member", "fcall", "index"]

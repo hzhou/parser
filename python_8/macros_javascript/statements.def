@@ -199,13 +199,24 @@ fncode:: parse_javascript
 
     #-- return -------------------
     subcode:: match_statements
-        $if_match var
+        $if_match return
             $call start_context, return
             continue
 
     subcode:: statement_context_cases
         $elif t_context == "return"
             stmt = (stmt, "return")
+            got_statement(stmt)
+
+    #-- throw -------------------
+    subcode:: match_statements
+        $if_match throw
+            $call start_context, throw
+            continue
+
+    subcode:: statement_context_cases
+        $elif t_context == "throw"
+            stmt = (stmt, "throw")
             got_statement(stmt)
 
     #-- break/continue ------
