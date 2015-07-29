@@ -243,11 +243,11 @@ def parse_javascript(src):
                 op = m.group(0)
                 if stack[-1][1] in atom_type:
                     if op == '(':
-                        cur_context = {type:"fcall"}
+                        cur_context = {"type":"fcall"}
                         stack.append(("fcall", "boc"))
                         context_stack.append(cur_context)
                     elif op== '[':
-                        cur_context = {type:"index"}
+                        cur_context = {"type":"index"}
                         stack.append(("index", "boc"))
                         context_stack.append(cur_context)
                     else:
@@ -256,16 +256,16 @@ def parse_javascript(src):
                 else:
                     if op == '{':
                         if stack[-1][1]=='boc':
-                            cur_context = {type:"compound"}
+                            cur_context = {"type":"compound"}
                             stack.append(("compound", "boc"))
                             context_stack.append(cur_context)
                             cur_context["statements"]=[]
                         else:
-                            cur_context = {type:"object"}
+                            cur_context = {"type":"object"}
                             stack.append(("object", "boc"))
                             context_stack.append(cur_context)
                     elif op == '[':
-                        cur_context = {type:"array"}
+                        cur_context = {"type":"array"}
                         stack.append(("array", "boc"))
                         context_stack.append(cur_context)
                     else:
@@ -331,7 +331,7 @@ def parse_javascript(src):
                 skip_space(1)
                 if src_pos<src_len and src[src_pos]=='(':
                     src_pos+=1
-                    cur_context = {type:"if_cond"}
+                    cur_context = {"type":"if_cond"}
                     stack.append(("if_cond", "boc"))
                     context_stack.append(cur_context)
                     cur_context["branch_list"]=[]
@@ -346,7 +346,7 @@ def parse_javascript(src):
                 skip_space(1)
                 if src_pos<src_len and src[src_pos]=='(':
                     src_pos+=1
-                    cur_context = {type:"while_cond"}
+                    cur_context = {"type":"while_cond"}
                     stack.append(("while_cond", "boc"))
                     context_stack.append(cur_context)
                     continue
@@ -357,7 +357,7 @@ def parse_javascript(src):
             m = re25.match(src, src_pos)
             if m:
                 src_pos=m.end()
-                cur_context = {type:"do_block"}
+                cur_context = {"type":"do_block"}
                 stack.append(("do_block", "boc"))
                 context_stack.append(cur_context)
                 continue
@@ -368,7 +368,7 @@ def parse_javascript(src):
                 skip_space(1)
                 if src_pos<src_len and src[src_pos]=='(':
                     src_pos+=1
-                    cur_context = {type:"for_cond"}
+                    cur_context = {"type":"for_cond"}
                     stack.append(("for_cond", "boc"))
                     context_stack.append(cur_context)
                     cur_context["statements"]=[]
@@ -383,7 +383,7 @@ def parse_javascript(src):
                 skip_space(1)
                 if src_pos<src_len and src[src_pos]=='(':
                     src_pos+=1
-                    cur_context = {type:"with_cond"}
+                    cur_context = {"type":"with_cond"}
                     stack.append(("with_cond", "boc"))
                     context_stack.append(cur_context)
                     continue
@@ -397,7 +397,7 @@ def parse_javascript(src):
                 skip_space(1)
                 if src_pos<src_len and src[src_pos]=='(':
                     src_pos+=1
-                    cur_context = {type:"switch_cond"}
+                    cur_context = {"type":"switch_cond"}
                     stack.append(("switch_cond", "boc"))
                     context_stack.append(cur_context)
                     continue
@@ -411,7 +411,7 @@ def parse_javascript(src):
                 skip_space(1)
                 if src_pos<src_len and src[src_pos]=='{':
                     src_pos+=1
-                    cur_context = {type:"try_block"}
+                    cur_context = {"type":"try_block"}
                     stack.append(("try_block", "boc"))
                     context_stack.append(cur_context)
                     cur_context["statements"]=[]
@@ -423,7 +423,7 @@ def parse_javascript(src):
             m = re30.match(src, src_pos)
             if m:
                 src_pos=m.end()
-                cur_context = {type:"var"}
+                cur_context = {"type":"var"}
                 stack.append(("var", "boc"))
                 context_stack.append(cur_context)
                 continue
@@ -431,7 +431,7 @@ def parse_javascript(src):
             m = re30.match(src, src_pos)
             if m:
                 src_pos=m.end()
-                cur_context = {type:"return"}
+                cur_context = {"type":"return"}
                 stack.append(("return", "boc"))
                 context_stack.append(cur_context)
                 continue
@@ -475,7 +475,7 @@ def parse_javascript(src):
             m = re34.match(src, src_pos)
             if m:
                 src_pos=m.end()
-                cur_context = {type:"case"}
+                cur_context = {"type":"case"}
                 stack.append(("case", "boc"))
                 context_stack.append(cur_context)
                 continue
@@ -486,7 +486,7 @@ def parse_javascript(src):
                 skip_space(1)
                 if src_pos<src_len and src[src_pos]=='(':
                     src_pos+=1
-                    cur_context = {type:"function_param"}
+                    cur_context = {"type":"function_param"}
                     stack.append(("function_param", "boc"))
                     context_stack.append(cur_context)
                     continue

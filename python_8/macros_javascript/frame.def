@@ -9,7 +9,7 @@ fncode:: parse_javascript
         last_context= None
 
     subcode: start_context(type)
-        cur_context = {type:"$(type)"}
+        cur_context = {"type":"$(type)"}
         stack.append: ("$(type)", "boc")
         context_stack.append: cur_context
 
