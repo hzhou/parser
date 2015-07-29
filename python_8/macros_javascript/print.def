@@ -1,0 +1,22 @@
+fncode: str_token(t)
+    $if t[1] in prime_type
+        return str(t[0])
+    $elif t[1]=="binary_exp"
+        return str_token(t[0][1])+' '+t[0][0]+' '+str_token(t[0][2])
+    $elif t[1]=="unary_exp"
+        return t[0][0]+str_token(t[0][1])
+    $elif t[1]=="postfix_exp"
+        return str_token(t[0][1])+t[0][0]
+    $elif t[1]=="list_exp"
+        tlist=[]
+        $for s in t[0]
+            tlist.append: str_token(s)
+        return tlist.join(', ')
+    $elif t[1]=="conditional_exp"
+        return str_token(t[0][0])+' ? '+t[0][1]+' : '+str_token(t[0][2])
+    $elif t[1]=="fcall"
+        return str_token(t[0][0])+'('+str_token(t[0][1])+')'
+    $elif t[1]=="index"
+        return str_token(t[0][0])+'['+str_token(t[0][1])+']'
+
+
