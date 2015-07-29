@@ -1,0 +1,268 @@
+#---- parse statements --------------
+fncode:: parse_javascript
+    #-- common subcode ---------
+    subcode: match_cond(keyword)
+        $if_match $(keyword)
+            $call skip_space_wide
+            $if_match (
+                BLOCK
+            $else
+                $call error, "$(keyword) missing ("
+
+    #-- if  ----------------
+    subcode:: match
+        &call if_match_continue, if
+            $call skip_space_wide
+            $if_match (
+                $call start_context, if_cond
+                #- branch_list for
+                #-    if cond1: block1
+                #-    elif cond2: block2
+                #-    ...
+                #-    else (None): blockN
+                cur_context["branch_list"]=[]
+            $else
+                $call error, "if missing ("
+
+    subcode:: reduce_context_cases
+        $elif t_context =="if_cond"
+            $call restart_context, if_block
+            cur_context["condition"]=t_atom
+
+    subcode:: statement_context_cases
+        $elif t_context =="if_block"
+            t = (last_context["condition"], stmt)
+            last_context["branch_list"].append(t)
+            $if_match else
+                $call skip_space_wide
+                &call match_cond, if
+                    $call restart_context, if_cond
+                $else
+                    $call restart_context, if_block
+                    cur_context["condition"]=None
+            $else
+                stmt = (last_context["branch_list"], "if")
+                got_statement(stmt)
+
+    #-- while ----------------------------------
+    subcode:: match
+        &call match_cond, while
+            $call start_context, while_cond
+            continue
+
+    subcode:: reduce_context_cases
+        $elif t_context == "while_cond"
+            $call restart_context, while_block
+            cur_context["condition"]=t_atom
+
+    subcode:: statement_context_cases
+        $elif t_context == "while_block"
+            stmt = ( (last_context["condition"], stmt), "while")
+            got_statement(stmt)
+
+    #-- do while -----------------------------
+    subcode:: match
+        &call if_match_continue, do
+            $call start_context, do_block
+
+    subcode:: statement_context_cases
+        $elif t_context == "do_block"
+            &call match_cond, while
+                last_context["block"]=stmt
+                $call restart_context, do_cond
+            $else
+                $call error, "do missing while"
+
+    subcode:: reduce_context_cases
+        $elif t_context == "do_cond"
+            stmt = ( (t_atom, last_context["block"]), "do_while")
+            stack.append: stmt
+            # -- if we don't need the semicolon
+            # cur = (';', ';')
+
+    #-- for ------------------------
+    subcode:: match
+        &call match_cond, for
+            $call start_context, for_cond
+            #- for conditions are made up from 3 statements
+            #-    or single statement (for/in)
+            cur_context["statements"]=[]
+            continue
+
+    subcode:: reduce_context_cases
+        $elif t_context == "for_cond"
+            $call restart_context, for_block
+            t_cond_list = cur_context["statements"]
+            t_cond_list.append: t_atom
+            cur_context["condition"]=t_cond_list
+            del cur_context["statements"]
+
+    subcode:: statement_context_cases
+        $elif t_context == "for_block"
+            stmt = ( (cur_context["condition"], stmt), "for")
+            got_statement(stmt)
+
+    #-- with ----------------------------------
+    subcode:: match
+        &call match_cond, with
+            $call start_context, with_cond
+            continue
+
+    subcode:: reduce_context_cases
+        $elif t_context == "with_cond"
+            $call restart_context, with_block
+            cur_context["condition"]=t_atom
+
+    subcode:: statement_context_cases
+        $elif t_context == "with_block"
+            stmt = ( (last_context["condition"], stmt), "with")
+            got_statement(stmt)
+
+    #-- switch ------------------------
+    subcode:: match
+        &call match_cond, switch
+            $call start_context, switch_cond
+            continue
+
+    subcode:: reduce_context_cases
+        $elif t_context == "switch_cond"
+            $call restart_context, switch_block
+            cur_context["condition"]=t_atom
+
+    subcode:: statement_context_cases
+        $elif t_context == "switch_block"
+            stmt = ( (last_context["condition"], stmt), "switch")
+            got_statement(stmt)
+
+    #-- try/catch/finally ---------------
+    #- try  ----------------
+    subcode:: match
+        &call if_match_continue, try
+            $call skip_space_wide
+            $if_match {
+                $call start_context, try_block
+                cur_context["statements"]=[]
+            $else
+                $call error, "try missing {"
+
+    subcode:: reduce_context_cases
+        $elif t_context =="try_block"
+            last_context["statements"].append(t_atom)
+            last_context["try_block"]=last_context["statements"]
+            del last_context["statements"]
+            last_context["catch_cond"]=None
+            last_context["catch_block"]=None
+            last_context["finally_block"]=None
+            &call match_cond, catch
+                $call restart_context, catch_cond
+            $else
+                stmt = ( last_context, "try")
+                got_statement(stmt)
+        $elif t_context == "catch_cond"
+            last_context["catch_cond"] = t_atom
+            $if_match {
+                $call restart_context, catch_block
+                cur_context["statements"]=[]
+            $else
+                $call error, "catch missing {"
+        $elif t_context == "catch_block"
+            last_context["statements"].append(t_atom)
+            last_context["catch_block"]=last_context["statements"]
+            del last_context["statements"]
+            $if_match finally
+                $call skip_space_wide
+                $if_match {
+                    $call restart_context, finally_block
+                    cur_context["statements"]=[]
+                $else
+                    $call error, "finally missing {"
+            $else
+                stmt = ( last_context, "try")
+                got_statement(stmt)
+        $elif t_context == "finally_block"
+            last_context["statements"].append(t_atom)
+            last_context["finally_block"]=last_context["statements"]
+            del last_context["statements"]
+            stmt = ( last_context, "try")
+            got_statement(stmt)
+
+    #-- var -------------------
+    subcode:: match
+        $if_match var
+            $call start_context, var
+            continue
+
+    subcode:: statement_context_cases
+        $elif t_context == "var"
+            stmt = (stmt, "var")
+            got_statement(stmt)
+
+    #-- return -------------------
+    subcode:: match
+        $if_match var
+            $call start_context, return
+            continue
+
+    subcode:: statement_context_cases
+        $elif t_context == "return"
+            stmt = (stmt, "return")
+            got_statement(stmt)
+
+    #-- break/continue ------
+    subcode:: match
+        &call if_match_continue, break|continue
+            type = m.group[0]
+            $call skip_space_narrow
+            $if_match $(pat_identifier)
+                $call skip_space_narrow
+                stmt = (m.group[0], type)
+            $else
+                stmt = (None, type)
+            $if_match [;\r\n]+
+                got_statement(stmt)
+            $else
+                $call error, "garbage after "+type
+
+    #-- case labels ----
+    subcode:: match
+        &call if_match_continue, default
+            $call skip_space_wide
+            $if_match :
+                stmt = (None, "case")
+                got_statement(stmt)
+            $else
+                $call error, "default label missing :"
+
+        &call if_match_continue, case
+            $call start_context, case
+
+    subcode:: match_colon_special
+        $if cur_context["type"]=="case" and not $(type:-2)=="?"
+            # functionally equivallent to ';'
+            cur = (';', ';')
+
+    subcode:: statement_context_cases
+        $elif t_context=="case"
+            stmt = (stmt, "case")
+            got_statement(stmt)
+
+#---- function ---------------
+fncode:: parse_javascript
+    subcode:: match
+        &call match_cond, function
+            $call start_context, function_param
+            continue
+
+    subcode:: reduce_context_cases
+        $elif t_context=="function_param"
+            last_context["param"]=t_atom
+            $call skip_space_wide
+            $if_match {
+                $call restart_context, function_block
+                cur_context["statements"]=[]
+            $else
+                $call error, "function missing {"
+        $elif t_context == "function_block"
+            last_context["statements"].append(t_atom)
+            cur = (last_context, "function")
+
