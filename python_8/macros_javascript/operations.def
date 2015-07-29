@@ -1,6 +1,5 @@
 #---- operations ---------------------
 fncode: get_token_value(var)
-    $global variables
     $if var[1]=="identifier"
         $if var[0] in variables
             return variables[var[0]]

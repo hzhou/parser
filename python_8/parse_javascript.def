@@ -3,6 +3,7 @@ include: macros_javascript/frame.def
 include: macros_javascript/setup.def
 include: macros_javascript/support.def
 include: macros_javascript/operations.def
+include: macros_javascript/statements.def
 
 #---- main --------------
 page: parse_javascript, basic_frame
@@ -13,10 +14,10 @@ page: parse_javascript, basic_frame
         1+2*3;
         !a?2:3
 
-    parse_javascript(s)
+    print parse_javascript(s)
 
 #---- ------------------
-fncode: parse_javascript(src)
+fncode:: parse_javascript(src)
     $call parse_operator_precedence
 
     #-- spaces and comments -----
@@ -34,28 +35,15 @@ fncode: parse_javascript(src)
             cur = (';', ';')
             break
 
-    #-- if  ----------------
-    subcode:: match
-        $if_match if
-            $call skip_space_wide
-            $if_match (
-                stack.append: ("if_cond", "boc")
-            $else
-                $call error, "if missing ("
-
-    subcode:: reduce_context
-        $if $(atom:-2)=="if_cond"
-            # got condition in stack[-1]
-            cur = ("if_block", "boc")
-
-    subcode:: on_statement
-        $if stack[-1][0]=="if_block"
-            stack.pop()
-
     #-- identifiers --------------
     subcode:: match
         $if_match $(pat_identifier)
             cur = (m.group(0), "identifier")
+            $call skip_space_narrow
+            $if_match :
+                stmt = (cur[0], "label")
+                got_statement(stmt)
+                continue
             break
 
 
@@ -88,7 +76,7 @@ fncode: parse_javascript(src)
             $else
                 cur = (int(m.group(1)), "int")
 
-    #-- match brackets -------------------------
+        #-- match brackets -------------------------
         &call if_match_continue, [\[\(\{]
             op = m.group(0)
             $if $(type:-1) in atom_type
@@ -102,6 +90,7 @@ fncode: parse_javascript(src)
                 $if op == '{'
                     $if $(type:-1)=='boc'
                         $call start_context, compound
+                        cur_context["statements"]=[]
                     $else
                         $call start_context, object
                 $elif op == '['
@@ -119,6 +108,11 @@ fncode: parse_javascript(src)
 
     #-- match operators -------------------------
     subcode:: match
+        $if_match :
+            cur = (":", ":")
+            $call @match_colon_special
+            break
+
         $if_match \+\+|--
             op = m.group(0)
             $if $(type:-1) in atom_type
@@ -130,7 +124,7 @@ fncode: parse_javascript(src)
         $call match_op, new|in|delete|typeof|void|instanceof
         $call match_op, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
         $call match_op, [+\-*/%^&|]=?
-        $call match_op, [,~!\?:]
+        $call match_op, [,~!\?]
 
         subcode: match_op(@pat)
             $if_match $(pat)
@@ -207,18 +201,16 @@ fncode: parse_javascript(src)
             $if $(type:-4)==',' or $(type:-4)=="boc"
                 # check $(type:-3) is identifier or string
                 t_name = $(atom:-3)
-                t = ( (t_name, stack[-1]), "object_item"
+                t = ( (t_name, stack[-1]), "object_item")
             $else
                 $call error, "object colon in the wrong place"
 
     #-- compound statement ----------
-    subcode:: start_context_cases
-        $(if:type=compound)
-            cur_context["statements"]=[]
-
-    subcode:: on_reduce_context
-        $if t_context =="compound"
-            got_statement(t_atom)
+    subcode:: reduce_context_cases
+        $elif t_context =="compound"
+            last_context["statements"].append(t_atom)
+            stmt = (last_context["statements"], "compound")
+            got_statement(stmt)
 
     #-- post process -------------
     subcode: post_process
@@ -228,11 +220,17 @@ fncode: parse_javascript(src)
             continue
 
     fncode: got_statement(stmt)
-        $call @on_statement
-        # print stmt
-        cur_context['statements'].append: stmt
+        nonlocal src_pos, cur_context
+        #- because ';' has precedence of 1
+        #--  on wrapping statement, $(type:-1) has to be 'boc' or 'bof', 
+        $if "statements" in cur_context
+            cur_context['statements'].append(stmt)
+        $else
+            t_context = stack[-1][0]
+            $call pop_context
+            $if 0
+                pass
+            $call @statement_context_cases
 
-    #-- return ------------------
-    subcode: return
-        return
+        # print stmt
 

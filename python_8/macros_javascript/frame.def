@@ -5,13 +5,24 @@ fncode:: parse_javascript
     #-- context ---------------
     subcode:: setup
         context_stack = []
-        cur_context = {type:"global", statements:[]}
+        cur_context = {'type':"global", 'statements':[]}
+        last_context= None
 
     subcode: start_context(type)
         cur_context = {type:"$(type)"}
         stack.append: ("$(type)", "boc")
         context_stack.append: cur_context
-        $call @start_context_cases
+
+    subcode: restart_context(type)
+        # e.g. if (cond_context) if_block context 
+        cur_context = last_context
+        stack.append: ("$(type)", "boc")
+        context_stack.append: cur_context
 
     subcode: pop_context
+        last_context= cur_context
         cur_context = context_stack.pop()
+
+    #-- return -------------
+    subcode: return
+        return cur_context

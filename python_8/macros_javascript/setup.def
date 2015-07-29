@@ -53,7 +53,7 @@ fncode:: parse_javascript
         atom_type.extend: literal_type
         atom_type.extend: number_type
         atom_type.extend: expr_type
-        atom_type.append: object_item
+        atom_type.append: "object_item"
 
         is_op_unary = ["~", "!", "delete", "new", "typeof", "void"]
 
