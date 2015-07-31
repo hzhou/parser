@@ -14,8 +14,8 @@ fncode:: parse_javascript
         '<<=':2
         '>>=':2
         '>>>=':2
-        '?':3 # conditional 
-        ':':3
+        '?':2 # conditional 
+        ':':2
         '||':4
         '&&':5
         '|':6
@@ -42,12 +42,11 @@ fncode:: parse_javascript
         '.':15
 
     subcode:: setup
-        literal_type = ["bool", "null", "int", "float", "string"]
-        number_type = ["int", "float", "num"]
+        literal_type = ["bool", "null", "int", "float", "string", "regex"]
         float_type  = ["float"]
+        number_type = ["int", "float", "num"]
 
-        prime_type = ["identifier"]
-        prime_type.extend: literal_type
+        compound_type = ["array", "object", "function"]
 
         expr_type   = ["identifier"]
         expr_type.extend: ["binary_exp", "unary_exp", "list_exp", "postfix_exp", "conditional_exp"]
@@ -55,6 +54,7 @@ fncode:: parse_javascript
 
         atom_type.extend: literal_type
         atom_type.extend: number_type
+        atom_type.extend: compound_type
         atom_type.extend: expr_type
         atom_type.append: "object_item"
 
@@ -64,3 +64,22 @@ fncode:: parse_javascript
         unary_type.extend: is_op_unary
 
         right_precedences = [2,3]
+
+    fncode: less_precedence(op1, op2)
+        p1 = precedence[op1]
+        p2 = precedence[op2]
+        $if op1 == '?'
+            return p2 > 3
+        $else 
+            $if p1 == p2
+                $if op2=='?'
+                    return 0
+                $elif op1==':'
+                    return 1
+                $elif p2==2
+                    return 0
+                $else
+                    return 1
+            $else
+                return p1 < p2
+                

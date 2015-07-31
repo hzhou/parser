@@ -1,22 +1,65 @@
-fncode: str_token(t)
-    $if t[1] in prime_type
-        return str(t[0])
+fncode: token(t, level)
+    $global prime_type=["int","float","string","bool","null"]
+    $(set:t=token(t[0][$1], level+1))
+    $if t[1] == "identifier"
+        s = str(t[0])
+    $elif t[1] in prime_type
+        s = repr(t[0])
     $elif t[1]=="binary_exp"
-        return str_token(t[0][1])+' '+t[0][0]+' '+str_token(t[0][2])
+        s = $(t:1)+' '+t[0][0]+' '+$(t:2)
     $elif t[1]=="unary_exp"
-        return t[0][0]+str_token(t[0][1])
+        $if re.match(r'\w', t[0][0][-1])
+            s = t[0][0]+' '+$(t:1)
+        $else
+            s = t[0][0]+$(t:1)
     $elif t[1]=="postfix_exp"
-        return str_token(t[0][1])+t[0][0]
+        s = $(t:1)+t[0][0]
     $elif t[1]=="list_exp"
-        tlist=[]
-        $for s in t[0]
-            tlist.append: str_token(s)
-        return tlist.join(', ')
+        s = token_array(t[0])
+    $elif t[1]=="object"
+        # s = '{'+token_array(t[0])+'}'
+        s = '{'+token(t[0], level+1)+'}'
+    $elif t[1]=="array"
+        s = '['+token_array(t[0])+']'
     $elif t[1]=="conditional_exp"
-        return str_token(t[0][0])+' ? '+t[0][1]+' : '+str_token(t[0][2])
+        s = $(t:0)+' ? '+$(t:1)+' : '+$(t:2)
     $elif t[1]=="fcall"
-        return str_token(t[0][0])+'('+str_token(t[0][1])+')'
+        s = $(t:0)+'('+$(t:1)+')'
     $elif t[1]=="index"
-        return str_token(t[0][0])+'['+str_token(t[0][1])+']'
+        s = $(t:0)+'['+$(t:1)+']'
+    $elif t[1]=="function"
+        $if "name" in t[0]
+            s_name = t[0]["name"]
+        $else
+            s_name = "-"
+        s = s_name+'('+token(t[0]['param'], level+1)+')'+'{'+str(len(t[0]["statements"]))+' stmts}'
+    $else
+        s = None
+
+    $if s is None
+        return str(t)
+    $elif level>10
+        return s
+    $else
+        return "("+t[1]+", "+s+ ")"
+
+fncode: token_array(t)
+    tlist=[]
+    n=len(t)
+    $if n>0
+        tlist.append: token(t[0], 1)
+        tlist.append: "... "+str(n-1)+" more items"
+    s = ', '.join(tlist)
+    return s
+
+
+fncode: print_stack(stack)
+    print "stack: ", end="" 
+    indent="    "
+    $for t in stack
+        print indent, token(t, 0)
+        $if t[1]=="boc"
+            indent+="    "
+    print "\n"
 
 

@@ -8,16 +8,18 @@ fncode:: parse_javascript
         cur_context = {'type':"global", 'statements':[]}
         last_context= None
 
-    subcode: start_context(type)
-        cur_context = {"type":"$(type)"}
-        stack.append: ("$(type)", "boc")
+    subcode: start_context(type, expect)
         context_stack.append: cur_context
+        cur_context = {"type":"$(type)", "expect":"$(expect)"}
+        stack.append: ("$(type)", "boc")
 
-    subcode: restart_context(type)
+    subcode: restart_context(type, expect)
         # e.g. if (cond_context) if_block context 
-        cur_context = last_context
-        stack.append: ("$(type)", "boc")
         context_stack.append: cur_context
+        cur_context = last_context
+        cur_context["type"]   = "$(type)"
+        cur_context["expect"] = "$(expect)"
+        stack.append: ("$(type)", "boc")
 
     subcode: pop_context
         last_context= cur_context
@@ -44,8 +46,11 @@ fncode:: parse_javascript
         return (t_pre+s[i0:i], s[i:i1]+t_post)
 
     subcode: error(msg)
-        (s0, s1)=synopsis(src, 40, src_pos, src_len)
-        $print source: "$s0" + "$s1" 
+        print_stack(stack)
+
         print "cur: ", cur
-        print "stack: ", stack
+
+        (s0, s1)=synopsis(src, 40, src_pos, src_len)
+        $print source[$src_pos]: "$s0" + "$s1" 
+
         raise Exception($(msg))

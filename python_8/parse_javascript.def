@@ -5,6 +5,8 @@ include: macros_javascript/support.def
 include: macros_javascript/operations.def
 include: macros_javascript/statements.def
 
+include: macros_javascript/print.def
+
 #---- main --------------
 page: parse_javascript, basic_frame
     module: python
@@ -33,59 +35,69 @@ fncode:: parse_javascript(src)
     subcode:: match
         $if match_end_of_statement()
             cur = (';', ';')
+            $if $(type:-1)=="boc"
+                stack.append: ('', '')
             break
 
+    #-- match statements ----
+    subcode:: setup
+        non_stmt_boc = ["fcall", "index", "object", "array"]
+        non_stmt_boc.extend: ["if_cond", "while_cond", "switch_cond", "with_cond", "catch_cond", "function_param"]
+
     subcode:: match
-        $call @match_statements
+        # All statements start at 'boc'
+        $if $(type:-1) == 'boc' and $(atom:-1) not in non_stmt_boc
+            &call if_match_continue, {
+                $call start_context, compound, }
+                cur_context["statements"]=[]
+            $call @match_statements
 
     #-- match primary -------------------------
     subcode:: match
-        #- keyword data -----------
-        &call if_match_break, true|false
-            cur = (m.group(0), "bool")
-        &call if_match_break, null
-            cur = (m.group(0), "null")
+        $if $(type:-1) not in atom_type
+            #- keyword data -----------
+            &call if_match_break, true|false
+                cur = (m.group(0), "bool")
+            &call if_match_break, null
+                cur = (m.group(0), "null")
 
-        #- string ------------
-        &call if_match_break, \"(([^\\\"]|\\.)*)\"
-            s=js_double_string(m.group(1))
-            cur = (s, "string")
-        &call if_match_break, '(([^\\']|\\.)*)'
-            s=js_single_string(m.group(1))
-            cur = (s, "string")
-        &call if_match_break, /([^\\]|\\.)+/[igm]*
-            cur = (m.group(0), "regex")
+            #- string ------------
+            &call if_match_break, \"(([^\\\"]|\\.)*)\"
+                s=js_double_string(m.group(1))
+                cur = (s, "string")
+            &call if_match_break, '(([^\\']|\\.)*)'
+                s=js_single_string(m.group(1))
+                cur = (s, "string")
+            &call if_match_break, /([^\\/]|\\.)+/[igm]*
+                cur = (m.group(0), "regex")
 
-        #- numbers ------------
-        &call if_match_break, r"0x[0-9a-f]+", re.I
-            cur = (int(m.group(0), 16), "int")
-        &call if_match_break, r"0[0-7]*", re.I
-            cur = (int(m.group(0), 8), "int")
-        &call if_match_break, (\d+)(\.\d+)?([eE][+-]?\d+)?
-            $if m.group(2) or m.group(3)
-                cur = (float(m.group(0)), "float")
-            $else
-                cur = (int(m.group(1)), "int")
+            #- numbers ------------
+            &call if_match_break, r"0x[0-9a-f]+", re.I
+                cur = (int(m.group(0), 16), "int")
+            &call if_match_break, r"0[0-7]*", re.I
+                cur = (int(m.group(0), 8), "int")
+            &call if_match_break, (\d+)(\.\d+)?([eE][+-]?\d+)?
+                $if m.group(2) or m.group(3)
+                    cur = (float(m.group(0)), "float")
+                $else
+                    cur = (int(m.group(1)), "int")
 
-        #-- match brackets -------------------------
+    #-- match brackets -------------------------
+    subcode:: match
         &call if_match_continue, [\[\(\{]
             op = m.group(0)
             $if $(type:-1) in atom_type
                 $if op == '('
-                    $call start_context, fcall
+                    $call start_context, fcall, )
                 $elif op== '['
-                    $call start_context, index
+                    $call start_context, index, ]
                 $else
                     $call error, "error opening bracket '"+op+"', forgot ';'?"
             $else
                 $if op == '{'
-                    $if $(type:-1)=='boc'
-                        $call start_context, compound
-                        cur_context["statements"]=[]
-                    $else
-                        $call start_context, object
+                    $call start_context, object, }
                 $elif op == '['
-                    $call start_context, array
+                    $call start_context, array, ]
                 $else # plain old parenthesis!
                     stack.append: ('(', '(')
 
@@ -118,8 +130,9 @@ fncode:: parse_javascript(src)
                 $call @reduce_postfix
             $else
                 $call error, "member not following atom"
+            continue
 
-        $call match_op, new|in|delete|typeof|void|instanceof
+        $call match_op, (new|in|delete|typeof|void|instanceof)\b
         $call match_op, (==?=?|!==?|>>?>?=?|<<?=?|&&?|\|\|?)
         $call match_op, [+\-*/%^&|]=?
         $call match_op, [,~!\?]
@@ -132,15 +145,11 @@ fncode:: parse_javascript(src)
 
     #-- identifiers --------------
     subcode:: match
+        $call @match_keyword
+
         $if_match $(pat_identifier)
             cur = (m.group(0), "identifier")
-            $call skip_space_narrow
-            $if_match :
-                stmt = (cur[0], "label")
-                got_statement(stmt)
-                continue
             break
-
 
     #-- reduce -------------------------
     subcode: reduce
@@ -181,15 +190,23 @@ fncode:: parse_javascript(src)
 
     #-- reduce context ---------
     subcode: reduce_context
-        t_op      = cur
-        t_context = $(atom:-2)
-        t_atom    = stack[-1]
-        cur = None
-        stack[-2:]=[]
-        $call pop_context
-        $if 0
-            pass
-        $call @reduce_context_cases
+        $if cur_context['expect']==cur[0]
+            t_op      = cur
+            t_context = $(atom:-2)
+            t_atom    = stack[-1]
+            cur = None
+            stack[-2:]=[]
+            $call pop_context
+            $if 0
+                pass
+            $call @reduce_context_cases
+        $elif cur_context['expect']==';'
+            #- Javascript allows omitting ; before closing } (and before ')' in the "for" statement)
+            #-   so we supply one here
+            src_pos-=1
+            cur=(';', ';')
+        $else
+            $call error, "Brackets mismatch, expect "+cur_context['expect']+", got "+cur[0]
 
     subcode:: reduce_context_cases
         $elif t_context == "fcall"
@@ -201,19 +218,15 @@ fncode:: parse_javascript(src)
                 t_atom=[]
             cur = (t_atom, "array")
         $elif t_context == "object"
-            $if t_atom[1]==""
-                t_atom=[]
             cur = (t_atom, "object")
 
     #-- reduce object_item -----
     subcode:: reduce_other
-        $elif $(type:-2)==':' and cur_context["type"]=="object"
-            $if $(type:-4)==',' or $(type:-4)=="boc"
-                # check $(type:-3) is identifier or string
-                t_name = $(atom:-3)
-                t = ( (t_name, stack[-1]), "object_item")
-            $else
-                $call error, "object colon in the wrong place"
+        $elif $(type:-2)==':' and cur_context["type"]=="object" and ($(type:-4)==',' or $(type:-4)=="boc")
+            # check $(type:-3) is identifier or string
+            t_name = $(atom:-3)
+            t = ( (t_name, stack[-1]), "object_item")
+            stack[-3:]=[t]
 
     #-- compound statement ----------
     subcode:: reduce_context_cases
@@ -232,11 +245,14 @@ fncode:: parse_javascript(src)
     fncode: got_statement(stmt)
         nonlocal src_pos, cur_context
         #- because ';' has precedence of 1
-        #--  on wrapping statement, $(type:-1) has to be 'boc' or 'bof', 
+        #--  on wrapping statement, $(type:-1) has to be 'boc'
         $if "statements" in cur_context
             cur_context['statements'].append(stmt)
+        $elif cur_context["expect"]!=';'
+            $call error, "Context mismatch, not expecting statement"
         $else
             t_context = stack[-1][0]
+            stack.pop()
             $call pop_context
             $if 0
                 pass

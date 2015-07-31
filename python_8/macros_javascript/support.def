@@ -41,12 +41,12 @@ fncode:: parse_javascript
 fncode: js_double_string(s)
     r_esc_extra = re.compile(r"\\([^0btnvfrxuX'\"\\])")
     s = r_esc_extra.sub(r'\1', s)
-    s = eval('"'+s+'"')
+    return eval('"'+s+'"')
 
 fncode: js_single_string(s)
     #--TODO: detect extra escapes e.g. \#
     r_double = re.compile('(?!\\)"')
     s = r.sub('\\"', s)
-    s = eval('"'+s+'"')
+    return eval('"'+s+'"')
 
 
