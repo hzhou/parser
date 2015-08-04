@@ -63,16 +63,16 @@ fncode::calc
             break
         $if /[-+*\/]/
             $call get_ts_group, 0
-            $call match_op_char, +, Plus
-            $call match_op_char, -, Minus
-            $call match_op_char, *, Mult
-            $call match_op_char, /, Div
+            $call match_op_char, +
+            $call match_op_char, -
+            $call match_op_char, *
+            $call match_op_char, /
             break
 
         # -------
-        subcode: match_op_char(c, name)
+        subcode: match_op_char(c)
             $case ts_group[0]=='$(c)'
-                cur.type=T_$(name)
+                cur.type=T_$(sym:$(c))
                 cur.val = 0
 
 #---- reduce ------------------------
@@ -83,10 +83,13 @@ fncode:: calc
             stack_len-=2
             stack.$push T_num, tf_val
         $else
-            tf_a = $(atom:3)
-            tf_b = $(atom:1)
+            $map binary_op, +, -, *, /
             stack_len-=3
-            # TODO
+            stack.$push T_num, tf_val
+
+        subcode: binary_op(op)
+            $case $(type:2)==T_$(sym:$(op))
+                tf_val = $(atom:3) $(op) $(atom:1)
 
 #---- support ------------------------------
 subcode:: _autoload
