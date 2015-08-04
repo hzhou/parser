@@ -1,34 +1,120 @@
+include: c/darray.def
 include: c/lex_static.def
 page: calc, basic_frame
     module: c
-    f_ans = calc("1+2*-3")
+    s=strdup("1+2*-3")
+    f_ans = calc(s)
     $print ans = $f_ans
 
+#---- frame ----------------------------
 fncode: calc(s)
     $call local_input, s
+    $call @setup
+    $my darray stack: struct token
+
+    macros:
+        type: stack[stack_len-$1].type
+        atom: stack[stack_len-$1].val
 
     $while 1
         $do
+            $local struct token cur
             $if match_eof()
-                $call set_cur, eof, 0
+                cur = (T_eof, 0)
                 break
             $call @match
 
-            c = match_char()
+            $call input_get_c, tn_c
         $do
-            $if 
+            $if cur.type == T_num
+                break
 
+            $if stack_len<1 || $(type:1) != T_num
+                $if cur.type == T_Minus
+                    cur.type = T_UMinus
+                $else
+                    $call die, "operator in wrong context"
+                break
+            
+            $if stack_len<2
+                break
 
+            $if op_table[cur.type] <= op_table[$(type:2)]
+                $call @reduce
+                continue
+        #-- shift ----------
+        $if cur.type != T_eof
+            stack.$push cur
+        $else
+            $if stack_len ==1
+                return stack[0].val
+            $else
+                $call die, "error"
+
+#---- match ------------------------
+fncode::calc
+    subcode:: match
+        $if /\s+/
+            continue
+        $if /[\d\.]+/
+            &call with_ts_group, 0
+                tf_val=atof(ts_group)
+            cur = (T_num, tf_val)
+            break
+        $if /[-+*\/]/
+            $call get_ts_group, 0
+            $call match_op_char, +, Plus
+            $call match_op_char, -, Minus
+            $call match_op_char, *, Mult
+            $call match_op_char, /, Div
+            break
+
+        # -------
+        subcode: match_op_char(c, name)
+            $case ts_group[0]=='$(c)'
+                cur.type=T_$(name)
+                cur.val = 0
+
+#---- reduce ------------------------
 fncode:: calc
-    $struct(token) float val, int type
+    subcode:: reduce
+        $if $(type:2) == T_UMinus
+            tf_val = -$(atom:1)
+            stack_len-=2
+            stack.$push T_num, tf_val
+        $else
+            tf_a = $(atom:3)
+            tf_b = $(atom:1)
+            stack_len-=3
+            # TODO
+
+#---- support ------------------------------
+subcode:: _autoload
+    $struct(token)  int type, float val
     macros:
         cur_atom: cur.val
         cur_type: cur.type
 
-    subcode: set_cur(type, val)
-        $(enum_hash:$(type))
-        $enum(T_$(type)) $(enum)
+subcode:: _autoload
+    $map Define_Type, eof
+    $map Define_Type, num
+    $map Define_Type, Plus, Minus, Mult, Div
+    $map Define_Type, UMinus
+    $map Define_Type, MAX
+    $global int op_table[T_MAX]
+    $(block:main_init)
+        op_table[T_eof] = 0
 
-        cur.type = T_$(type)
-        cur.val  = $(val)
+        op_table[T_num] = -1
+
+        op_table[T_Plus]=1
+        op_table[T_Minus]=1
+        op_table[T_Mult]=2
+        op_table[T_Div]=2
+
+        op_table[T_UMinus]=99
+
+subcode: Define_Type(name)
+    $(autoinc:T)
+    $define(T_$(name)) $(T)
 

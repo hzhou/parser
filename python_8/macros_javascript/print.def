@@ -62,4 +62,14 @@ fncode: print_stack(stack)
             indent+="    "
     print "\n"
 
-
+/*
+subcode:: parse_javascript
+    subcode:: on_cur_token
+        print "\x1b[2J\x1b[1,1H", end=""
+        print_stack(stack)
+        $print cur token: $cur
+        (s1, s2) = synopsis(src, 30, src_pos, src_len)
+        $print source: [$s1]  [$s2]
+        $import time
+        time.sleep(1)
+*/
